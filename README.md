@@ -120,3 +120,7 @@ More details are available in
 [`ros2_ws/src/gsi_search_bridge/README.md`](ros2_ws/src/gsi_search_bridge/README.md)
 and
 [`ros2_ws/simulation/search_world_v1/README.md`](ros2_ws/simulation/search_world_v1/README.md).
+
+The complete mathematical specification, policy equations, benchmark design,
+and statistical estimators are documented in
+[`docs/zh/concepts/search-intelligence-mathematics.md`](docs/zh/concepts/search-intelligence-mathematics.md).
