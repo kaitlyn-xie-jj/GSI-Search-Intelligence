@@ -203,6 +203,9 @@ class SearchEpisodeRunner:
                 novelty_weight=self.config.novelty_weight,
                 travel_weight=self.config.travel_weight,
                 distance_scale_m=self.config.distance_scale_m,
+                verification_followup_limit=(
+                    self.config.verification_followup_limit
+                ),
             )
         raise ValueError(f"unsupported benchmark policy: {policy_name}")
 

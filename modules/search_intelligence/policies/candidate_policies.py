@@ -100,6 +100,7 @@ class ActiveSearchPolicy(SearchPolicy):
     travel_weight: float = 0.1
     distance_scale_m: float = 100.0
     minimum_utility: Optional[float] = None
+    verification_followup_limit: Optional[int] = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "candidates", _validated_candidates(self.candidates))
@@ -117,6 +118,11 @@ class ActiveSearchPolicy(SearchPolicy):
             raise ValueError("distance_scale_m must be positive")
         if self.minimum_utility is not None and not math.isfinite(self.minimum_utility):
             raise ValueError("minimum_utility must be finite")
+        if (
+            self.verification_followup_limit is not None
+            and self.verification_followup_limit <= 0
+        ):
+            raise ValueError("verification_followup_limit must be positive")
 
     def score_candidates(self, state: SearchState) -> Tuple[ViewpointScore, ...]:
         scores = tuple(
@@ -205,14 +211,15 @@ class ActiveSearchPolicy(SearchPolicy):
         if criteria.min_confirmations <= 1 and criteria.min_persistence_s <= 0.0:
             return None
 
-        grouped: Dict[str, list[Tuple[float, int, Optional[str]]]] = {}
+        grouped: Dict[str, list[Tuple[float, int, int, Optional[str]]]] = {}
         order = 0
-        for observation in state.observations:
+        for observation_index, observation in enumerate(state.observations):
             for detection in observation.matching_detections(criteria.min_confidence):
                 key = detection.entity_id or detection.label.strip().lower()
                 localized_cell_id = detection.attributes.get("localized_cell_id")
                 grouped.setdefault(key, []).append((
                     observation.timestamp_s,
+                    observation_index,
                     order,
                     str(localized_cell_id) if localized_cell_id is not None else None,
                 ))
@@ -225,12 +232,22 @@ class ActiveSearchPolicy(SearchPolicy):
                 len(detections) >= criteria.min_confirmations
                 and max(timestamps) - min(timestamps) >= criteria.min_persistence_s
             )
-            localized = [item for item in detections if item[2] is not None]
-            if not confirmed and localized:
-                pending.append(max(localized, key=lambda item: item[1]))
+            localized = [item for item in detections if item[3] is not None]
+            if confirmed or not localized:
+                continue
+            latest = max(localized, key=lambda item: item[2])
+            followup_count = sum(
+                latest[3] in observation.visible_cell_ids
+                for observation in state.observations[latest[1] + 1:]
+            )
+            if (
+                self.verification_followup_limit is None
+                or followup_count < self.verification_followup_limit
+            ):
+                pending.append(latest)
         if not pending:
             return None
-        return max(pending, key=lambda item: item[1])[2]
+        return max(pending, key=lambda item: item[2])[3]
 
     def _score(
         self,

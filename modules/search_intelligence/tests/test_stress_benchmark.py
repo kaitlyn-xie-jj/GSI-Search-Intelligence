@@ -77,6 +77,16 @@ class SearchStressScenarioTests(unittest.TestCase):
 
 
 class SearchStressReportingTests(unittest.TestCase):
+    def test_verification_followup_limit_reaches_benchmark_config(self):
+        runs = run_stress_benchmark(
+            verification_stress_profiles()[:1],
+            repetitions=1,
+            policy_names=("active",),
+            verification_followup_limit=1,
+        )
+
+        self.assertEqual(runs[0].report.config.verification_followup_limit, 1)
+
     def test_writer_creates_long_form_and_profile_artifacts(self):
         runs = run_stress_benchmark(
             default_stress_profiles()[:1],

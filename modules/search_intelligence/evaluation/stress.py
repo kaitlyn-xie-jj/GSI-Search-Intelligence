@@ -7,7 +7,7 @@ import json
 import math
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, Mapping, Sequence, Tuple
+from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Tuple
 
 from ..belief import BinarySensorModel
 from ..contracts import SearchTask
@@ -153,6 +153,7 @@ def run_stress_benchmark(
     repetitions: int = 20,
     base_seed: int = 0,
     policy_names: Sequence[str] = SUPPORTED_POLICIES,
+    verification_followup_limit: Optional[int] = None,
 ) -> Tuple[SearchStressRun, ...]:
     """Run every profile over a freshly budgeted copy of the shared scenarios."""
     runs = []
@@ -167,6 +168,7 @@ def run_stress_benchmark(
             base_seed=base_seed,
             sensor_model=profile.sensor_model,
             observation_quality=profile.observation_quality,
+            verification_followup_limit=verification_followup_limit,
         )
         runs.append(SearchStressRun(
             profile=profile,

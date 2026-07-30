@@ -494,7 +494,14 @@ $$
 \min_{d\in\mathcal D_e^t}t_d<t_{\mathrm{persist}}.
 $$
 
-若最近一次待复核检测定位到单元 $c_e^*$，可用于复核的未访问候选集合为
+若最近一次待复核检测 $d_e^*$ 定位到单元 $c_e^*$，它之后覆盖该单元的 follow-up
+observation 数量记为
+
+$$
+k_e^t=\sum_{\tau>t(d_e^*)}\mathbf 1[c_e^*\in V(v_\tau)].
+$$
+
+当未配置上限，或 $k_e^t<k_{\max}$ 时，可用于复核的未访问候选集合为
 
 $$
 \mathcal V_{\mathrm{verify}}(e)=
@@ -516,6 +523,9 @@ $$
 $U_{\mathrm{active}}$ 排序。这个机制只读取任务契约和 observation history；
 benchmark 的 synthetic sensor 与真实仿真 sensor adapter 都应通过 detection attributes
 提供观测得到的 `localized_cell_id`，policy 不读取 ground truth target cell。
+`verification_followup_limit` 对应 $k_{\max}$；设为 `1` 时每次 detection 最多强制触发
+一次 follow-up，未配置时持续复核到确认或没有可用候选。前者限制 false alarm 的预算消耗，
+后者更积极地利用已定位 detection，两者应作为独立实验条件报告。
 
 ## 9. 资源累计、成功与终止条件
 

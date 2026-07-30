@@ -211,7 +211,13 @@ class CandidatePolicyTests(unittest.TestCase):
         )
         self.assertEqual(len(session.policy_decisions), 2)
 
-    def _verification_case(self, *, min_confirmations=2, localized=True):
+    def _verification_case(
+        self,
+        *,
+        min_confirmations=2,
+        localized=True,
+        verification_followup_limit=None,
+    ):
         task = SearchTask.from_skill_params({
             "task_id": "active-policy-verification",
             "area_token": "Area-A",
@@ -248,6 +254,7 @@ class CandidatePolicyTests(unittest.TestCase):
             information_gain_weight=0.0,
             novelty_weight=0.0,
             travel_weight=0.0,
+            verification_followup_limit=verification_followup_limit,
         )
         attributes = {}
         if localized:
@@ -300,6 +307,36 @@ class CandidatePolicyTests(unittest.TestCase):
             policy.decision_metadata(state, exploratory.viewpoint)[
                 "verification_cell_id"
             ]
+        )
+
+    def test_negative_verification_followup_resumes_active_ranking(self):
+        policy, state, exploratory, near_verification = self._verification_case(
+            verification_followup_limit=1,
+        )
+        state = state.advance(SearchObservation(
+            viewpoint=near_verification.viewpoint,
+            timestamp_s=2.0,
+            visible_cell_ids=(self.cell_ids[0],),
+        ))
+
+        self.assertEqual(policy.select_next(state), exploratory.viewpoint)
+        metadata = policy.decision_metadata(state, exploratory.viewpoint)
+        self.assertFalse(metadata["verification_mode"])
+        self.assertIsNone(metadata["verification_cell_id"])
+
+    def test_unlimited_verification_keeps_pending_detection_active(self):
+        policy, state, _, near_verification = self._verification_case()
+        state = state.advance(SearchObservation(
+            viewpoint=near_verification.viewpoint,
+            timestamp_s=2.0,
+            visible_cell_ids=(self.cell_ids[0],),
+        ))
+
+        self.assertEqual(
+            policy.decision_metadata(state, policy.select_next(state))[
+                "verification_cell_id"
+            ],
+            self.cell_ids[0],
         )
 
 

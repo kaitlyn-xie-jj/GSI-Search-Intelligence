@@ -91,6 +91,7 @@ class SearchBenchmarkConfig:
     novelty_weight: float = 0.25
     travel_weight: float = 0.1
     distance_scale_m: float = 100.0
+    verification_followup_limit: Optional[int] = None
 
     def __post_init__(self) -> None:
         names = tuple(str(name).strip().lower() for name in self.policy_names)
@@ -145,6 +146,11 @@ class SearchBenchmarkConfig:
             raise ValueError("candidate_stride_cells must be positive")
         if self.max_candidates is not None and self.max_candidates <= 0:
             raise ValueError("max_candidates must be positive")
+        if (
+            self.verification_followup_limit is not None
+            and self.verification_followup_limit <= 0
+        ):
+            raise ValueError("verification_followup_limit must be positive")
         object.__setattr__(self, "policy_names", names)
 
     def start_viewpoint(self, scenario: SearchBenchmarkScenario) -> Viewpoint:

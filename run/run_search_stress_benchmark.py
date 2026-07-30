@@ -47,6 +47,15 @@ def main() -> int:
     parser.add_argument("--repetitions", type=int, default=20)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
+        "--verification-followup-limit",
+        type=int,
+        default=None,
+        help=(
+            "Maximum forced follow-up observations per pending detection; "
+            "the default is unlimited."
+        ),
+    )
+    parser.add_argument(
         "--output-dir",
         default=str(PROJECT_ROOT / "results" / "search_stress_benchmark"),
     )
@@ -60,6 +69,7 @@ def main() -> int:
         repetitions=args.repetitions,
         base_seed=args.seed,
         policy_names=tuple(args.policies),
+        verification_followup_limit=args.verification_followup_limit,
     )
     artifacts = write_stress_benchmark_results(runs, args.output_dir)
     payload = {
