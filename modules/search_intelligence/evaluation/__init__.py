@@ -18,6 +18,7 @@ from .stress import (
     default_stress_profiles,
     run_stress_benchmark,
     stress_benchmark_scenarios,
+    verification_stress_profiles,
     write_stress_benchmark_results,
 )
 
@@ -40,6 +41,7 @@ __all__ = [
     "focused_grid_belief",
     "run_stress_benchmark",
     "stress_benchmark_scenarios",
+    "verification_stress_profiles",
     "write_benchmark_report",
     "write_stress_benchmark_results",
 ]

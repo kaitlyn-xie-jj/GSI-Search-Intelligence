@@ -65,3 +65,17 @@ This runs 9,600 episodes with the default four policies. It writes a combined
 episode CSV, grouped summary CSV, JSON manifest, and a complete trace report for
 each profile. Profile comparisons reuse the same scenario/repetition seeds so
 sensor samples remain paired.
+
+To isolate detection verification under nominal and high-false-alarm sensing:
+
+```bash
+python run/run_search_stress_benchmark.py \
+  --profiles verified_nominal verified_high_false_alarm \
+  --repetitions 20 \
+  --seed 20260730 \
+  --output-dir results/search_verification_benchmark_v2
+```
+
+The verified profiles require two observations of the same target entity before
+declaring `FOUND`. Independent simulated false alarms receive viewpoint-specific
+entity IDs and therefore cannot confirm one another.

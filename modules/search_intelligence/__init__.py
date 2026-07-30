@@ -52,6 +52,7 @@ from .evaluation import (
     default_stress_profiles,
     run_stress_benchmark,
     stress_benchmark_scenarios,
+    verification_stress_profiles,
     write_benchmark_report,
     write_stress_benchmark_results,
 )
@@ -107,6 +108,7 @@ __all__ = [
     "normalize_semantic_label",
     "run_stress_benchmark",
     "stress_benchmark_scenarios",
+    "verification_stress_profiles",
     "write_benchmark_report",
     "write_stress_benchmark_results",
 ]

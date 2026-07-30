@@ -8,6 +8,7 @@ from modules.search_intelligence import (
     SearchBenchmarkConfig,
     SearchBenchmarkRunner,
     SearchEpisodeRunner,
+    Viewpoint,
     default_benchmark_scenarios,
     write_benchmark_report,
 )
@@ -132,6 +133,31 @@ class SearchBenchmarkRunnerTests(unittest.TestCase):
 
         self.assertFalse(result.declared_found)
         self.assertFalse(result.target_found)
+
+    def test_independent_false_alarms_have_distinct_entity_ids(self):
+        config = SearchBenchmarkConfig(
+            policy_names=("active",),
+            repetitions=1,
+            sensor_model=BinarySensorModel(1.0, 0.999999999999),
+        )
+        runner = SearchEpisodeRunner(config)
+
+        first = runner._detections(
+            self.scenario,
+            Viewpoint(10.0, 10.0, 30.0, 0.0),
+            (),
+            seed=1,
+        )
+        second = runner._detections(
+            self.scenario,
+            Viewpoint(30.0, 10.0, 30.0, 0.0),
+            (),
+            seed=1,
+        )
+
+        self.assertEqual(len(first), 1)
+        self.assertEqual(len(second), 1)
+        self.assertNotEqual(first[0].entity_id, second[0].entity_id)
 
     def test_report_writer_creates_json_and_csv_artifacts(self):
         report = SearchBenchmarkRunner(self.config).run((self.scenario,))

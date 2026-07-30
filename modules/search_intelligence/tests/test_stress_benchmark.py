@@ -8,6 +8,7 @@ from modules.search_intelligence import (
     default_stress_profiles,
     run_stress_benchmark,
     stress_benchmark_scenarios,
+    verification_stress_profiles,
     write_stress_benchmark_results,
 )
 
@@ -60,6 +61,20 @@ class SearchStressScenarioTests(unittest.TestCase):
             },
         )
 
+    def test_verification_profiles_require_two_confirmations(self):
+        profiles = verification_stress_profiles()
+
+        self.assertEqual(
+            {item.profile_id for item in profiles},
+            {"verified_nominal", "verified_high_false_alarm"},
+        )
+        self.assertTrue(all(item.min_confirmations == 2 for item in profiles))
+        scenarios = stress_benchmark_scenarios(min_confirmations=2)
+        self.assertTrue(all(
+            item.task.success_criteria.min_confirmations == 2
+            for item in scenarios
+        ))
+
 
 class SearchStressReportingTests(unittest.TestCase):
     def test_writer_creates_long_form_and_profile_artifacts(self):
@@ -85,6 +100,7 @@ class SearchStressReportingTests(unittest.TestCase):
             self.assertEqual(len(rows), 24)
             self.assertIn("layout", rows[0])
             self.assertIn("observation_quality", rows[0])
+            self.assertIn("min_confirmations", rows[0])
 
 
 if __name__ == "__main__":

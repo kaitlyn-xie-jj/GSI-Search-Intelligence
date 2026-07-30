@@ -242,7 +242,9 @@ class SearchEpisodeRunner:
             label=scenario.task.target.query,
             confidence=self.config.detection_confidence,
             estimated_position=(viewpoint.x, viewpoint.y, 0.0),
-            entity_id=f"false-positive:{scenario.scenario_id}",
+            entity_id=(
+                f"false-positive:{scenario.scenario_id}:{viewpoint.key}"
+            ),
             attributes={"ground_truth_match": False},
         ),)
 

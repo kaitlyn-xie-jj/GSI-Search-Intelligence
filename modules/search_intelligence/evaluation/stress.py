@@ -34,6 +34,7 @@ class SearchStressProfile:
     sensor_model: BinarySensorModel = field(default_factory=BinarySensorModel)
     observation_quality: float = 1.0
     budget_scale: float = 1.0
+    min_confirmations: int = 1
 
     def __post_init__(self) -> None:
         if not self.profile_id.strip():
@@ -42,6 +43,8 @@ class SearchStressProfile:
             raise ValueError("observation_quality must be within [0, 1]")
         if not math.isfinite(self.budget_scale) or self.budget_scale <= 0:
             raise ValueError("budget_scale must be finite and positive")
+        if self.min_confirmations <= 0:
+            raise ValueError("min_confirmations must be positive")
 
     def to_dict(self) -> Dict[str, Any]:
         data = asdict(self)
@@ -101,13 +104,34 @@ def default_stress_profiles() -> Tuple[SearchStressProfile, ...]:
     )
 
 
+def verification_stress_profiles() -> Tuple[SearchStressProfile, ...]:
+    """Return paired profiles that isolate two-observation target verification."""
+    return (
+        SearchStressProfile(
+            "verified_nominal",
+            "Nominal sensing with two independent target confirmations.",
+            BinarySensorModel(0.85, 0.01),
+            min_confirmations=2,
+        ),
+        SearchStressProfile(
+            "verified_high_false_alarm",
+            "High false alarms with two independent target confirmations.",
+            BinarySensorModel(0.85, 0.15),
+            min_confirmations=2,
+        ),
+    )
+
+
 def stress_benchmark_scenarios(
     *,
     budget_scale: float = 1.0,
+    min_confirmations: int = 1,
 ) -> Tuple[SearchBenchmarkScenario, ...]:
     """Build 24 matched scenarios spanning map, target, and prior conditions."""
     if not math.isfinite(budget_scale) or budget_scale <= 0:
         raise ValueError("budget_scale must be finite and positive")
+    if min_confirmations <= 0:
+        raise ValueError("min_confirmations must be positive")
     scenarios = []
     for layout in _layout_specs():
         for target_position, target_index in layout.target_cells.items():
@@ -118,6 +142,7 @@ def stress_benchmark_scenarios(
                     target_index,
                     prior_condition,
                     budget_scale,
+                    min_confirmations,
                 ))
     return tuple(scenarios)
 
@@ -132,7 +157,10 @@ def run_stress_benchmark(
     """Run every profile over a freshly budgeted copy of the shared scenarios."""
     runs = []
     for profile in tuple(profiles):
-        scenarios = stress_benchmark_scenarios(budget_scale=profile.budget_scale)
+        scenarios = stress_benchmark_scenarios(
+            budget_scale=profile.budget_scale,
+            min_confirmations=profile.min_confirmations,
+        )
         config = SearchBenchmarkConfig(
             policy_names=tuple(policy_names),
             repetitions=repetitions,
@@ -254,6 +282,7 @@ def _stress_scenario(
     target_index: Tuple[int, int],
     prior_condition: str,
     budget_scale: float,
+    min_confirmations: int,
 ) -> SearchBenchmarkScenario:
     scenario_id = f"{layout.layout_id}-{target_position}-{prior_condition}"
     area_id = f"stress-{scenario_id}"
@@ -267,6 +296,7 @@ def _stress_scenario(
         "target_token": "yellow-van",
         "max_viewpoints": max_viewpoints,
         "conf_ge": 0.5,
+        "min_confirmations": min_confirmations,
     })
     grid = SearchGrid.from_task(task, resolution_m=layout.resolution_m)
     target_cell = grid.cell(*target_index)
@@ -317,6 +347,7 @@ def _stress_scenario(
             "prior_focus_mass": focus_mass,
             "max_viewpoints": max_viewpoints,
             "budget_scale": budget_scale,
+            "min_confirmations": min_confirmations,
         },
     )
 
@@ -340,6 +371,7 @@ def _stress_episode_row(
         "false_positive_probability": (
             profile.sensor_model.false_positive_probability
         ),
+        "min_confirmations": profile.min_confirmations,
     })
     return row
 
