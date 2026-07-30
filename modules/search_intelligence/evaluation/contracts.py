@@ -92,6 +92,10 @@ class SearchBenchmarkConfig:
     travel_weight: float = 0.1
     distance_scale_m: float = 100.0
     verification_followup_limit: Optional[int] = None
+    persistent_distractor_probability: float = 0.0
+    false_alarm_correlation: float = 0.0
+    correlated_false_alarm_shared_identity: bool = False
+    localization_error_std_m: float = 0.0
 
     def __post_init__(self) -> None:
         names = tuple(str(name).strip().lower() for name in self.policy_names)
@@ -131,6 +135,8 @@ class SearchBenchmarkConfig:
         for name in (
             "observation_quality",
             "detection_confidence",
+            "persistent_distractor_probability",
+            "false_alarm_correlation",
         ):
             if not 0 <= getattr(self, name) <= 1:
                 raise ValueError(f"{name} must be within [0, 1]")
@@ -151,6 +157,11 @@ class SearchBenchmarkConfig:
             and self.verification_followup_limit <= 0
         ):
             raise ValueError("verification_followup_limit must be positive")
+        if (
+            not math.isfinite(self.localization_error_std_m)
+            or self.localization_error_std_m < 0
+        ):
+            raise ValueError("localization_error_std_m must be finite and non-negative")
         object.__setattr__(self, "policy_names", names)
 
     def start_viewpoint(self, scenario: SearchBenchmarkScenario) -> Viewpoint:
@@ -190,11 +201,27 @@ class SearchEpisodeResult:
     initial_entropy_nats: float
     final_entropy_nats: float
     entropy_reduction_nats: float
+    detection_count: int = 0
+    target_detection_count: int = 0
+    persistent_distractor_count: int = 0
+    correlated_false_alarm_count: int = 0
+    independent_false_alarm_count: int = 0
+    mean_localization_error_m: float = 0.0
     policy_trace: Tuple[Mapping[str, Any], ...] = ()
     belief_entropy_trace: Tuple[float, ...] = ()
+    sensor_trace: Tuple[Mapping[str, Any], ...] = ()
 
     def __post_init__(self) -> None:
-        if self.repetition < 0 or self.steps < 0:
+        counts = (
+            self.repetition,
+            self.steps,
+            self.detection_count,
+            self.target_detection_count,
+            self.persistent_distractor_count,
+            self.correlated_false_alarm_count,
+            self.independent_false_alarm_count,
+        )
+        if any(value < 0 for value in counts):
             raise ValueError("repetition and steps must not be negative")
         for name in (
             "elapsed_time_s",
@@ -203,6 +230,7 @@ class SearchEpisodeResult:
             "shortest_detection_distance_m",
             "initial_entropy_nats",
             "final_entropy_nats",
+            "mean_localization_error_m",
         ):
             if not math.isfinite(getattr(self, name)) or getattr(self, name) < 0:
                 raise ValueError(f"{name} must be finite and non-negative")
@@ -217,6 +245,11 @@ class SearchEpisodeResult:
             tuple(dict(item) for item in self.policy_trace),
         )
         object.__setattr__(self, "belief_entropy_trace", tuple(self.belief_entropy_trace))
+        object.__setattr__(
+            self,
+            "sensor_trace",
+            tuple(dict(item) for item in self.sensor_trace),
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

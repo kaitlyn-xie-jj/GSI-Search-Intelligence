@@ -142,6 +142,9 @@ class SearchSession:
                 observation,
                 self.search_grid,
                 min_detection_confidence=self.state.task.success_criteria.min_confidence,
+                max_localization_error_m=(
+                    self.state.task.success_criteria.max_localization_error_m
+                ),
             )
             self._belief_updates.append(update)
             next_belief = update.posterior.probabilities

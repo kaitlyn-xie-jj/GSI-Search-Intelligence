@@ -79,3 +79,35 @@ python run/run_search_stress_benchmark.py \
 The verified profiles require two observations of the same target entity before
 declaring `FOUND`. Independent simulated false alarms receive viewpoint-specific
 entity IDs and therefore cannot confirm one another.
+
+## Realism stress benchmark
+
+The V5 profiles explicitly test assumptions that independent false alarms do
+not cover:
+
+- `verified_persistent_distractor`: one target-like physical source keeps the
+  same entity identity across viewpoints;
+- `verified_correlated_false_alarm`: an episode-level common-mode Bernoulli
+  variable correlates false alarms and can preserve one tracker identity;
+- `verified_localization_noise`: deterministic seeded 2D Gaussian position
+  error is checked against the task localization threshold;
+- `verified_combined_realism`: all three failures are enabled together, with a
+  matched `verified_combined_control` using the same base detector rates.
+
+```bash
+python run/run_search_stress_benchmark.py \
+  --profiles verified_nominal verified_high_false_alarm \
+    verified_combined_control verified_persistent_distractor \
+    verified_correlated_false_alarm verified_localization_noise \
+    verified_combined_realism \
+  --policies active \
+  --repetitions 20 \
+  --seed 20260730 \
+  --output-dir results/search_realism_benchmark_v5
+```
+
+Full profile reports include `sensor_trace` entries for every commanded
+viewpoint. Combined episode CSV rows include detection-source counts and mean
+localization error. A shorter failed episode is not an efficiency gain when it
+terminated on a distractor; distance and SPL must be interpreted with true
+success and false-positive rate.

@@ -35,6 +35,11 @@ class SearchStressProfile:
     observation_quality: float = 1.0
     budget_scale: float = 1.0
     min_confirmations: int = 1
+    persistent_distractor_probability: float = 0.0
+    false_alarm_correlation: float = 0.0
+    correlated_false_alarm_shared_identity: bool = False
+    localization_error_std_m: float = 0.0
+    max_localization_error_m: Optional[float] = None
 
     def __post_init__(self) -> None:
         if not self.profile_id.strip():
@@ -45,6 +50,25 @@ class SearchStressProfile:
             raise ValueError("budget_scale must be finite and positive")
         if self.min_confirmations <= 0:
             raise ValueError("min_confirmations must be positive")
+        for name in (
+            "persistent_distractor_probability",
+            "false_alarm_correlation",
+        ):
+            if not 0.0 <= getattr(self, name) <= 1.0:
+                raise ValueError(f"{name} must be within [0, 1]")
+        if (
+            not math.isfinite(self.localization_error_std_m)
+            or self.localization_error_std_m < 0
+        ):
+            raise ValueError("localization_error_std_m must be finite and non-negative")
+        if (
+            self.max_localization_error_m is not None
+            and (
+                not math.isfinite(self.max_localization_error_m)
+                or self.max_localization_error_m < 0
+            )
+        ):
+            raise ValueError("max_localization_error_m must be finite and non-negative")
 
     def to_dict(self) -> Dict[str, Any]:
         data = asdict(self)
@@ -122,10 +146,58 @@ def verification_stress_profiles() -> Tuple[SearchStressProfile, ...]:
     )
 
 
+def realism_stress_profiles() -> Tuple[SearchStressProfile, ...]:
+    """Return verification profiles with correlated and localization failures."""
+    return (
+        SearchStressProfile(
+            "verified_combined_control",
+            "Matched P_D/P_FA control for the combined realism profile.",
+            BinarySensorModel(0.85, 0.10),
+            min_confirmations=2,
+            max_localization_error_m=15.0,
+        ),
+        SearchStressProfile(
+            "verified_persistent_distractor",
+            "A fixed target-like object retains one identity across viewpoints.",
+            BinarySensorModel(0.85, 0.01),
+            min_confirmations=2,
+            persistent_distractor_probability=0.85,
+        ),
+        SearchStressProfile(
+            "verified_correlated_false_alarm",
+            "Episode-level common-mode false alarms share a tracked identity.",
+            BinarySensorModel(0.85, 0.15),
+            min_confirmations=2,
+            false_alarm_correlation=0.8,
+            correlated_false_alarm_shared_identity=True,
+        ),
+        SearchStressProfile(
+            "verified_localization_noise",
+            "Target detections include Gaussian map-position error.",
+            BinarySensorModel(0.85, 0.01),
+            min_confirmations=2,
+            localization_error_std_m=10.0,
+            max_localization_error_m=15.0,
+        ),
+        SearchStressProfile(
+            "verified_combined_realism",
+            "Persistent distractors, correlated alarms, and localization noise.",
+            BinarySensorModel(0.85, 0.10),
+            min_confirmations=2,
+            persistent_distractor_probability=0.70,
+            false_alarm_correlation=0.7,
+            correlated_false_alarm_shared_identity=True,
+            localization_error_std_m=8.0,
+            max_localization_error_m=15.0,
+        ),
+    )
+
+
 def stress_benchmark_scenarios(
     *,
     budget_scale: float = 1.0,
     min_confirmations: int = 1,
+    max_localization_error_m: Optional[float] = None,
 ) -> Tuple[SearchBenchmarkScenario, ...]:
     """Build 24 matched scenarios spanning map, target, and prior conditions."""
     if not math.isfinite(budget_scale) or budget_scale <= 0:
@@ -143,6 +215,7 @@ def stress_benchmark_scenarios(
                     prior_condition,
                     budget_scale,
                     min_confirmations,
+                    max_localization_error_m,
                 ))
     return tuple(scenarios)
 
@@ -161,6 +234,7 @@ def run_stress_benchmark(
         scenarios = stress_benchmark_scenarios(
             budget_scale=profile.budget_scale,
             min_confirmations=profile.min_confirmations,
+            max_localization_error_m=profile.max_localization_error_m,
         )
         config = SearchBenchmarkConfig(
             policy_names=tuple(policy_names),
@@ -169,6 +243,14 @@ def run_stress_benchmark(
             sensor_model=profile.sensor_model,
             observation_quality=profile.observation_quality,
             verification_followup_limit=verification_followup_limit,
+            persistent_distractor_probability=(
+                profile.persistent_distractor_probability
+            ),
+            false_alarm_correlation=profile.false_alarm_correlation,
+            correlated_false_alarm_shared_identity=(
+                profile.correlated_false_alarm_shared_identity
+            ),
+            localization_error_std_m=profile.localization_error_std_m,
         )
         runs.append(SearchStressRun(
             profile=profile,
@@ -210,7 +292,7 @@ def write_stress_benchmark_results(
     _write_rows(episode_path, episode_rows)
     _write_rows(summary_path, summary_rows)
     manifest = {
-        "schema_version": "gsi-search-stress-v1",
+        "schema_version": "gsi-search-stress-v2",
         "profiles": [run.profile.to_dict() for run in runs],
         "profile_artifacts": profile_artifacts,
         "episode_count": len(episode_rows),
@@ -285,6 +367,7 @@ def _stress_scenario(
     prior_condition: str,
     budget_scale: float,
     min_confirmations: int,
+    max_localization_error_m: Optional[float],
 ) -> SearchBenchmarkScenario:
     scenario_id = f"{layout.layout_id}-{target_position}-{prior_condition}"
     area_id = f"stress-{scenario_id}"
@@ -299,6 +382,7 @@ def _stress_scenario(
         "max_viewpoints": max_viewpoints,
         "conf_ge": 0.5,
         "min_confirmations": min_confirmations,
+        "max_localization_error_m": max_localization_error_m,
     })
     grid = SearchGrid.from_task(task, resolution_m=layout.resolution_m)
     target_cell = grid.cell(*target_index)
@@ -332,6 +416,20 @@ def _stress_scenario(
         belief = focused_grid_belief(grid, focus_ids, focus_mass)
     else:
         raise ValueError(f"unsupported prior condition: {prior_condition}")
+    distractor_cell = min(
+        (
+            cell for cell in grid.searchable_cells
+            if cell.cell_id != target_cell.cell_id
+        ),
+        key=lambda cell: (
+            -belief[cell.cell_id],
+            math.hypot(
+                cell.center[0] - layout.start_xy[0],
+                cell.center[1] - layout.start_xy[1],
+            ),
+            cell.cell_id,
+        ),
+    )
     return SearchBenchmarkScenario(
         scenario_id=scenario_id,
         task=task,
@@ -350,6 +448,8 @@ def _stress_scenario(
             "max_viewpoints": max_viewpoints,
             "budget_scale": budget_scale,
             "min_confirmations": min_confirmations,
+            "max_localization_error_m": max_localization_error_m,
+            "distractor_cell_id": distractor_cell.cell_id,
         },
     )
 
@@ -374,6 +474,15 @@ def _stress_episode_row(
             profile.sensor_model.false_positive_probability
         ),
         "min_confirmations": profile.min_confirmations,
+        "persistent_distractor_probability": (
+            profile.persistent_distractor_probability
+        ),
+        "false_alarm_correlation": profile.false_alarm_correlation,
+        "correlated_false_alarm_shared_identity": (
+            profile.correlated_false_alarm_shared_identity
+        ),
+        "localization_error_std_m": profile.localization_error_std_m,
+        "max_localization_error_m": profile.max_localization_error_m,
     })
     return row
 
@@ -453,6 +562,16 @@ def _summary_row(
         "energy_used": estimate(item.energy_used for item in episodes),
         "entropy_reduction_nats": estimate(
             item.entropy_reduction_nats for item in episodes
+        ),
+        "detection_count": estimate(item.detection_count for item in episodes),
+        "persistent_distractor_count": estimate(
+            item.persistent_distractor_count for item in episodes
+        ),
+        "correlated_false_alarm_count": estimate(
+            item.correlated_false_alarm_count for item in episodes
+        ),
+        "mean_localization_error_m": estimate(
+            item.mean_localization_error_m for item in episodes
         ),
     }
     for metric_name, metric in metrics.items():

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from modules.search_intelligence import (
     default_stress_profiles,
+    realism_stress_profiles,
     run_stress_benchmark,
     stress_benchmark_scenarios,
     verification_stress_profiles,
@@ -72,6 +73,28 @@ class SearchStressScenarioTests(unittest.TestCase):
         scenarios = stress_benchmark_scenarios(min_confirmations=2)
         self.assertTrue(all(
             item.task.success_criteria.min_confirmations == 2
+            for item in scenarios
+        ))
+
+    def test_realism_profiles_cover_requested_sensor_failures(self):
+        profiles = realism_stress_profiles()
+
+        self.assertEqual(len(profiles), 5)
+        self.assertTrue(any(
+            item.persistent_distractor_probability > 0 for item in profiles
+        ))
+        self.assertTrue(any(item.false_alarm_correlation > 0 for item in profiles))
+        self.assertTrue(any(item.localization_error_std_m > 0 for item in profiles))
+        noisy = next(
+            item for item in profiles
+            if item.profile_id == "verified_localization_noise"
+        )
+        scenarios = stress_benchmark_scenarios(
+            min_confirmations=noisy.min_confirmations,
+            max_localization_error_m=noisy.max_localization_error_m,
+        )
+        self.assertTrue(all(
+            item.task.success_criteria.max_localization_error_m == 15.0
             for item in scenarios
         ))
 

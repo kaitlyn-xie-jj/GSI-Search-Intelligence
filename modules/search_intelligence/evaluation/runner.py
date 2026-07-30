@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import math
-from typing import Dict, Iterable, Mapping, Tuple
+from typing import Any, Dict, Iterable, Mapping, Optional, Tuple
 
 from ..belief import BayesianBeliefUpdater, BeliefMap
 from ..contracts import SearchObservation, TargetDetection, Viewpoint
@@ -61,6 +61,7 @@ class SearchEpisodeRunner:
             belief_updater=BayesianBeliefUpdater(self.config.sensor_model),
         )
         entropy_trace = [initial.entropy_nats]
+        sensor_trace = []
 
         while not session.completed:
             viewpoint = session.next_viewpoint()
@@ -85,6 +86,11 @@ class SearchEpisodeRunner:
                 visible_ids,
                 seed,
             )
+            sensor_trace.append({
+                "viewpoint_key": viewpoint.key,
+                "visible_cell_ids": visible_ids,
+                "detections": tuple(_detection_trace(item) for item in detections),
+            })
             timestamp = session.state.elapsed_time_s + elapsed
             session.record_observation(SearchObservation(
                 viewpoint=viewpoint,
@@ -106,6 +112,11 @@ class SearchEpisodeRunner:
                             self.config.observation_quality
                         )
                     ),
+                    "persistent_distractor_probability": (
+                        self.config.persistent_distractor_probability
+                    ),
+                    "false_alarm_correlation": self.config.false_alarm_correlation,
+                    "localization_error_std_m": self.config.localization_error_std_m,
                 },
             ))
             entropy_trace.append(BeliefMap.from_mapping(
@@ -137,6 +148,28 @@ class SearchEpisodeRunner:
             session.state.distance_travelled_m,
         )
         final_entropy = BeliefMap.from_mapping(session.state.belief).entropy_nats
+        all_detections = tuple(
+            detection
+            for observation in session.state.observations
+            for detection in observation.detections
+        )
+        source_counts = {
+            source: sum(
+                detection.attributes.get("source_kind") == source
+                for detection in all_detections
+            )
+            for source in (
+                "target",
+                "persistent_distractor",
+                "correlated_false_alarm",
+                "independent_false_alarm",
+            )
+        }
+        localization_errors = tuple(
+            float(detection.attributes["localization_error_m"])
+            for detection in all_detections
+            if "localization_error_m" in detection.attributes
+        )
         return SearchEpisodeResult(
             scenario_id=scenario.scenario_id,
             prior_condition=scenario.prior_condition,
@@ -157,8 +190,18 @@ class SearchEpisodeRunner:
             initial_entropy_nats=initial.entropy_nats,
             final_entropy_nats=final_entropy,
             entropy_reduction_nats=initial.entropy_nats - final_entropy,
+            detection_count=len(all_detections),
+            target_detection_count=source_counts["target"],
+            persistent_distractor_count=source_counts["persistent_distractor"],
+            correlated_false_alarm_count=source_counts["correlated_false_alarm"],
+            independent_false_alarm_count=source_counts["independent_false_alarm"],
+            mean_localization_error_m=(
+                sum(localization_errors) / len(localization_errors)
+                if localization_errors else 0.0
+            ),
             policy_trace=session.policy_decisions,
             belief_entropy_trace=tuple(entropy_trace),
+            sensor_trace=tuple(sensor_trace),
         )
 
     def _candidates(
@@ -216,52 +259,148 @@ class SearchEpisodeRunner:
         visible_cell_ids: Tuple[str, ...],
         seed: int,
     ) -> Tuple[TargetDetection, ...]:
-        target_visible = scenario.target_cell_id in set(visible_cell_ids)
-        probability = (
-            self.config.sensor_model.effective_detection_probability(
+        visible_ids = set(visible_cell_ids)
+        target_visible = scenario.target_cell_id in visible_ids
+        detections = []
+        if target_visible:
+            probability = self.config.sensor_model.effective_detection_probability(
                 self.config.observation_quality
             )
-            if target_visible
-            else self.config.sensor_model.false_positive_probability
+            if _stable_unit_interval(
+                seed,
+                scenario.scenario_id,
+                viewpoint.key,
+                "sensor",
+            ) < probability:
+                detections.append(self._localized_detection(
+                    scenario,
+                    viewpoint,
+                    scenario.target_cell.center,
+                    scenario.target_entity_id,
+                    "target",
+                    True,
+                    seed,
+                ))
+
+        distractor_cell_id = scenario.metadata.get("distractor_cell_id")
+        distractor_cell = next((
+            cell for cell in scenario.grid.searchable_cells
+            if cell.cell_id == distractor_cell_id
+        ), None)
+        distractor_visible = (
+            distractor_cell is not None
+            and distractor_cell.cell_id in visible_ids
         )
-        sample = _stable_unit_interval(
+        if (
+            distractor_visible
+            and _stable_unit_interval(
+                seed,
+                scenario.scenario_id,
+                viewpoint.key,
+                "persistent-distractor",
+            ) < self.config.persistent_distractor_probability
+        ):
+            detections.append(self._localized_detection(
+                scenario,
+                viewpoint,
+                distractor_cell.center,
+                f"persistent-distractor:{scenario.scenario_id}",
+                "persistent_distractor",
+                False,
+                seed,
+            ))
+
+        if not target_visible:
+            background_kind = self._background_false_alarm_kind(
+                scenario,
+                viewpoint,
+                seed,
+            )
+            if background_kind is not None:
+                shared_identity = (
+                    background_kind == "correlated_false_alarm"
+                    and self.config.correlated_false_alarm_shared_identity
+                )
+                entity_id = (
+                    f"correlated-false-alarm:{scenario.scenario_id}"
+                    if shared_identity
+                    else f"false-positive:{scenario.scenario_id}:{viewpoint.key}"
+                )
+                detections.append(self._localized_detection(
+                    scenario,
+                    viewpoint,
+                    (viewpoint.x, viewpoint.y),
+                    entity_id,
+                    background_kind,
+                    False,
+                    seed,
+                ))
+        return tuple(detections)
+
+    def _background_false_alarm_kind(
+        self,
+        scenario: SearchBenchmarkScenario,
+        viewpoint: Viewpoint,
+        seed: int,
+    ) -> Optional[str]:
+        common_mode = _stable_unit_interval(
+            seed,
+            scenario.scenario_id,
+            "false-alarm-common-mode",
+        ) < self.config.false_alarm_correlation
+        if common_mode:
+            detected = _stable_unit_interval(
+                seed,
+                scenario.scenario_id,
+                "false-alarm-common-event",
+            ) < self.config.sensor_model.false_positive_probability
+            return "correlated_false_alarm" if detected else None
+        detected = _stable_unit_interval(
             seed,
             scenario.scenario_id,
             viewpoint.key,
             "sensor",
+        ) < self.config.sensor_model.false_positive_probability
+        return "independent_false_alarm" if detected else None
+
+    def _localized_detection(
+        self,
+        scenario: SearchBenchmarkScenario,
+        viewpoint: Viewpoint,
+        source_xy: Tuple[float, float],
+        entity_id: str,
+        source_kind: str,
+        ground_truth_match: bool,
+        seed: int,
+    ) -> TargetDetection:
+        error_x, error_y = _stable_normal_pair(
+            self.config.localization_error_std_m,
+            seed,
+            scenario.scenario_id,
+            viewpoint.key,
+            source_kind,
         )
-        if sample >= probability:
-            return ()
-        if target_visible:
-            target = scenario.target_cell.center
-            return (TargetDetection(
-                label=scenario.task.target.query,
-                confidence=self.config.detection_confidence,
-                estimated_position=(target[0], target[1], 0.0),
-                entity_id=scenario.target_entity_id,
-                attributes={
-                    "ground_truth_match": True,
-                    "localized_cell_id": scenario.target_cell_id,
-                },
-            ),)
-        localized_cell = scenario.grid.nearest_searchable_cell(
-            viewpoint.x,
-            viewpoint.y,
-        )
-        return (TargetDetection(
+        estimated_x = source_xy[0] + error_x
+        estimated_y = source_xy[1] + error_y
+        localized_cell = scenario.grid.cell_at(estimated_x, estimated_y)
+        localization_error = math.hypot(error_x, error_y)
+        return TargetDetection(
             label=scenario.task.target.query,
             confidence=self.config.detection_confidence,
-            estimated_position=(viewpoint.x, viewpoint.y, 0.0),
-            entity_id=(
-                f"false-positive:{scenario.scenario_id}:{viewpoint.key}"
-            ),
+            estimated_position=(estimated_x, estimated_y, 0.0),
+            entity_id=entity_id,
             attributes={
-                "ground_truth_match": False,
+                "source_kind": source_kind,
+                "ground_truth_match": ground_truth_match,
                 "localized_cell_id": (
-                    localized_cell.cell_id if localized_cell is not None else None
+                    localized_cell.cell_id
+                    if localized_cell is not None and localized_cell.searchable
+                    else None
                 ),
+                "localization_error_m": localization_error,
+                "localization_error_xy_m": (error_x, error_y),
             },
-        ),)
+        )
 
     def _shortest_detection_distance(
         self,
@@ -346,3 +485,26 @@ def _stable_seed(*parts: object) -> int:
 
 def _stable_unit_interval(*parts: object) -> float:
     return _stable_seed(*parts) / float(2 ** 64)
+
+
+def _stable_normal_pair(
+    standard_deviation: float,
+    *parts: object,
+) -> Tuple[float, float]:
+    if standard_deviation <= 0:
+        return (0.0, 0.0)
+    first = max(_stable_unit_interval(*parts, "normal-radius"), 1e-12)
+    second = _stable_unit_interval(*parts, "normal-angle")
+    radius = standard_deviation * math.sqrt(-2.0 * math.log(first))
+    angle = 2.0 * math.pi * second
+    return (radius * math.cos(angle), radius * math.sin(angle))
+
+
+def _detection_trace(detection: TargetDetection) -> Mapping[str, Any]:
+    return {
+        "label": detection.label,
+        "confidence": detection.confidence,
+        "entity_id": detection.entity_id,
+        "estimated_position": detection.estimated_position,
+        "attributes": dict(detection.attributes),
+    }

@@ -6,7 +6,7 @@
     },
     "search_params": {
       "filename": "search_params.yaml",
-      "sha256": "af5e5dd857bd63f18ca10e84a20d406d780a96a82bd16c70d381b2eda1b11f92"
+      "sha256": "5015ec8b438175c1a07c6655ba4474cd229d544bdec6bdc2549beb3108c58acc"
     },
     "search_prior": {
       "filename": "search_prior.json",
@@ -22,7 +22,7 @@
     },
     "world": {
       "filename": "gsi_search_world_v1.sdf",
-      "sha256": "7490b0374998a382dea3b00b45295d7b80ba94071a1b9a443aedb7852ece8e25"
+      "sha256": "8b97b709dbc13c0555a14c46bb8d35529311f2870eae4e50dc6961681763f788"
     }
   },
   "complexity": {

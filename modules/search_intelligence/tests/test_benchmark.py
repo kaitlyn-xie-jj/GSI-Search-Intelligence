@@ -10,6 +10,7 @@ from modules.search_intelligence import (
     SearchEpisodeRunner,
     Viewpoint,
     default_benchmark_scenarios,
+    stress_benchmark_scenarios,
     write_benchmark_report,
 )
 from modules.search_intelligence.evaluation import (
@@ -158,6 +159,94 @@ class SearchBenchmarkRunnerTests(unittest.TestCase):
         self.assertEqual(len(first), 1)
         self.assertEqual(len(second), 1)
         self.assertNotEqual(first[0].entity_id, second[0].entity_id)
+
+    def test_persistent_distractor_keeps_identity_across_viewpoints(self):
+        scenario = stress_benchmark_scenarios(min_confirmations=2)[0]
+        distractor_cell_id = scenario.metadata["distractor_cell_id"]
+        runner = SearchEpisodeRunner(SearchBenchmarkConfig(
+            policy_names=("active",),
+            persistent_distractor_probability=1.0,
+        ))
+
+        first = runner._detections(
+            scenario,
+            Viewpoint(10.0, 10.0, 30.0, 0.0),
+            (distractor_cell_id,),
+            seed=3,
+        )
+        second = runner._detections(
+            scenario,
+            Viewpoint(30.0, 10.0, 30.0, 0.0),
+            (distractor_cell_id,),
+            seed=3,
+        )
+
+        self.assertEqual(first[0].entity_id, second[0].entity_id)
+        self.assertEqual(
+            first[0].attributes["source_kind"],
+            "persistent_distractor",
+        )
+
+    def test_correlated_false_alarms_can_share_identity(self):
+        runner = SearchEpisodeRunner(SearchBenchmarkConfig(
+            policy_names=("active",),
+            sensor_model=BinarySensorModel(1.0, 0.999999999999),
+            false_alarm_correlation=1.0,
+            correlated_false_alarm_shared_identity=True,
+        ))
+
+        first = runner._detections(
+            self.scenario,
+            Viewpoint(10.0, 10.0, 30.0, 0.0),
+            (),
+            seed=7,
+        )
+        second = runner._detections(
+            self.scenario,
+            Viewpoint(30.0, 10.0, 30.0, 0.0),
+            (),
+            seed=7,
+        )
+
+        self.assertEqual(first[0].entity_id, second[0].entity_id)
+        self.assertEqual(
+            first[0].attributes["source_kind"],
+            "correlated_false_alarm",
+        )
+
+    def test_localization_noise_is_deterministic_and_auditable(self):
+        runner = SearchEpisodeRunner(SearchBenchmarkConfig(
+            policy_names=("active",),
+            sensor_model=BinarySensorModel(1.0, 0.0),
+            localization_error_std_m=10.0,
+        ))
+        viewpoint = Viewpoint(10.0, 10.0, 30.0, 0.0)
+
+        first = runner._detections(
+            self.scenario,
+            viewpoint,
+            (self.scenario.target_cell_id,),
+            seed=11,
+        )
+        second = runner._detections(
+            self.scenario,
+            viewpoint,
+            (self.scenario.target_cell_id,),
+            seed=11,
+        )
+
+        self.assertEqual(first, second)
+        self.assertGreater(first[0].attributes["localization_error_m"], 0.0)
+        self.assertEqual(first[0].attributes["source_kind"], "target")
+
+    def test_episode_records_sensor_trace_and_detection_counts(self):
+        result = SearchEpisodeRunner(self.config).run(self.scenario, "active")
+
+        self.assertEqual(len(result.sensor_trace), result.steps)
+        self.assertEqual(
+            result.detection_count,
+            sum(len(item["detections"]) for item in result.sensor_trace),
+        )
 
     def test_report_writer_creates_json_and_csv_artifacts(self):
         report = SearchBenchmarkRunner(self.config).run((self.scenario,))

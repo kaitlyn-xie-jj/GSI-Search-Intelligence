@@ -648,6 +648,9 @@ def _search_params_yaml(config: Mapping[str, Any]) -> str:
     flight_altitude_m: {_yaml_float(search['flight_altitude_m'])}
     sensor_footprint_radius_m: {_yaml_float(search['sensor_footprint_radius_m'])}
     max_viewpoints: {int(search['max_viewpoints'])}
+    min_confirmations: 2
+    max_localization_error_m: 5.0
+    verification_followup_limit: 0
     semantic_map_path: {semantic_path}
     search_prior_path: {prior_path}
     sensor_detection_probability: 0.85
@@ -683,6 +686,7 @@ def _search_params_yaml(config: Mapping[str, Any]) -> str:
     battery_topic: /mavros/battery
     goal_pose_topic: /gsi/uav/goal_pose
     outcome_topic: /gsi/search/outcome
+    trace_output_path: /tmp/GSI/results/gazebo_sensor_validation/search_world_v1_trace.jsonl
 
 gsi_mavros_offboard_controller:
   ros__parameters:

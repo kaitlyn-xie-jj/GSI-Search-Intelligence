@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 import struct
+from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 import rclpy
@@ -47,6 +48,7 @@ class GsiSearchNode(Node):
         self._battery_percentage: Optional[float] = None
         self._session: Optional[SearchSession] = None
         self._adapter: Optional[SearchObservationAdapter] = None
+        self._grid: Optional[SearchGrid] = None
         self._commanded_viewpoint: Optional[Viewpoint] = None
         self._command_start_time_s = 0.0
         self._command_start_distance_m = 0.0
@@ -101,6 +103,9 @@ class GsiSearchNode(Node):
             "flight_altitude_m": 20.0,
             "sensor_footprint_radius_m": 15.0,
             "max_viewpoints": 30,
+            "min_confirmations": 2,
+            "max_localization_error_m": 5.0,
+            "verification_followup_limit": 0,
             "semantic_map_path": "",
             "search_prior_path": "",
             "sensor_detection_probability": 0.85,
@@ -137,6 +142,7 @@ class GsiSearchNode(Node):
             "battery_topic": "/uav/battery_state",
             "goal_pose_topic": "/gsi/uav/goal_pose",
             "outcome_topic": "/gsi/search/outcome",
+            "trace_output_path": "",
         }
         for name, value in defaults.items():
             self.declare_parameter(name, value)
@@ -229,6 +235,10 @@ class GsiSearchNode(Node):
             },
             "target_token": self._parameter("target_query"),
             "max_viewpoints": int(self._parameter("max_viewpoints")),
+            "min_confirmations": int(self._parameter("min_confirmations")),
+            "max_localization_error_m": float(
+                self._parameter("max_localization_error_m")
+            ),
         })
         grid = SearchGrid.from_task(
             task,
@@ -241,6 +251,7 @@ class GsiSearchNode(Node):
             search_prior_path=str(self._parameter("search_prior_path")),
         )
         grid = scenario.grid
+        self._grid = grid
         footprint = float(self._parameter("sensor_footprint_radius_m"))
         candidates = CandidateViewpointGenerator(
             altitude_m=float(self._parameter("flight_altitude_m")),
@@ -252,7 +263,14 @@ class GsiSearchNode(Node):
                 self._parameter("sensor_false_positive_probability")
             ),
         )
-        policy = ActiveSearchPolicy(candidates, sensor_model=sensor_model)
+        verification_limit = int(self._parameter("verification_followup_limit"))
+        policy = ActiveSearchPolicy(
+            candidates,
+            sensor_model=sensor_model,
+            verification_followup_limit=(
+                verification_limit if verification_limit > 0 else None
+            ),
+        )
         self._adapter = SearchObservationAdapter(
             grid,
             target_query=str(self._parameter("target_query")),
@@ -284,6 +302,10 @@ class GsiSearchNode(Node):
         self._command_start_battery = self._battery_percentage
         self._settled_since_s = None
         self._publish_goal(viewpoint)
+        self._write_trace("command", {
+            "step_index": self._session.state.step_index if self._session else 0,
+            "commanded_viewpoint": _viewpoint_dict(viewpoint),
+        })
 
     def _republish_goal_if_due(self) -> None:
         assert self._commanded_viewpoint is not None
@@ -352,6 +374,15 @@ class GsiSearchNode(Node):
         )
         observation = self._adapter.adapt(frame, self._commanded_viewpoint)
         state = self._session.record_observation(observation)
+        self._write_trace("observation", {
+            "step_index": state.step_index,
+            "observation": observation.to_dict(),
+            "belief": dict(state.belief),
+            "policy_decision": (
+                self._session.policy_decisions[-1]
+                if self._session.policy_decisions else None
+            ),
+        })
         self.get_logger().info(
             f"Recorded viewpoint {state.step_index}; "
             f"detections={len(observation.detections)}, "
@@ -425,6 +456,17 @@ class GsiSearchNode(Node):
                 (float(position.x), float(position.y), float(position.z))
                 if in_map else None
             )
+            localized_cell_id = None
+            if estimated_position is not None and self._grid is not None:
+                cell = self._grid.cell_at(
+                    estimated_position[0],
+                    estimated_position[1],
+                )
+                if cell is not None and cell.searchable:
+                    localized_cell_id = cell.cell_id
+            localization_uncertainty = _horizontal_position_uncertainty_m(
+                result.pose.covariance
+            )
             detections.append(TargetDetection(
                 label=label,
                 confidence=float(result.hypothesis.score),
@@ -433,6 +475,9 @@ class GsiSearchNode(Node):
                 attributes={
                     "source": "vision_msgs/Detection3DArray",
                     "detection_frame_id": message.header.frame_id,
+                    "localized_cell_id": localized_cell_id,
+                    "localization_error_m": localization_uncertainty,
+                    "localization_metric": "reported_horizontal_covariance",
                 },
             ))
         return tuple(detections)
@@ -481,6 +526,9 @@ class GsiSearchNode(Node):
             sort_keys=True,
         )
         self._outcome_publisher.publish(message)
+        self._write_trace("outcome", {
+            "outcome": self._session.outcome.to_dict(),
+        })
         self._outcome_published = True
         self.get_logger().info(f"Search completed: {message.data}")
 
@@ -489,6 +537,21 @@ class GsiSearchNode(Node):
 
     def _now_s(self) -> float:
         return self.get_clock().now().nanoseconds / 1e9
+
+    def _write_trace(self, event: str, payload: Dict[str, object]) -> None:
+        output_path = str(self._parameter("trace_output_path")).strip()
+        if not output_path:
+            return
+        path = Path(output_path).expanduser()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        record = {
+            "schema_version": "gsi-gazebo-sensor-trace-v1",
+            "event": event,
+            "timestamp_s": self._now_s(),
+            **payload,
+        }
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, sort_keys=True) + "\n")
 
 
 def _message_timestamp_s(message: object) -> float:
@@ -514,6 +577,25 @@ def _yaw_from_quaternion(quaternion: object) -> float:
 
 def _normalize_label(value: str) -> str:
     return "".join(character for character in value.lower() if character.isalnum())
+
+
+def _horizontal_position_uncertainty_m(covariance: object) -> float:
+    values = tuple(float(value) for value in covariance)
+    if len(values) != 36:
+        return 0.0
+    variance_x = max(0.0, values[0])
+    variance_y = max(0.0, values[7])
+    return math.sqrt(variance_x + variance_y)
+
+
+def _viewpoint_dict(viewpoint: Viewpoint) -> Dict[str, float]:
+    return {
+        "x": viewpoint.x,
+        "y": viewpoint.y,
+        "z": viewpoint.z,
+        "yaw": viewpoint.yaw,
+        "pitch": viewpoint.pitch,
+    }
 
 
 def main(args=None) -> None:

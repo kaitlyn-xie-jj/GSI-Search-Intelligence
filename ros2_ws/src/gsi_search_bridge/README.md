@@ -155,6 +155,20 @@ ros2 launch gsi_search_bridge visionflow_search.launch.py \
 
 The search outcome is published as JSON on `/gsi/search/outcome`.
 
+The live node maps every map-frame detection pose into a GSI search cell and
+derives horizontal localization uncertainty from the reported pose covariance.
+SearchWorld writes command, observation, belief, policy-decision, and outcome
+records to:
+
+```text
+/tmp/GSI/results/gazebo_sensor_validation/search_world_v1_trace.jsonl
+```
+
+The JSONL records are produced only from ROS/Gazebo sensor messages and policy
+state. Evaluator ground truth is not read by the search node. A detection must
+satisfy the configured covariance-derived localization threshold for both
+Bayesian positive evidence and success confirmation.
+
 ## Parameterized SearchWorld V1
 
 SearchWorld V1 generates a controlled 80 m by 60 m outdoor search benchmark

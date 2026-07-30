@@ -652,6 +652,50 @@ $$
 
 当 $R=20$ 时为 320 episodes，每种 policy 有 80 episodes。
 
+### 10.4 Realism failure models
+
+V5 不再假设所有 false alarm 相互独立。对固定 target-like distractor $d$，只要它位于
+视点 footprint 内，就按
+
+$$
+z_t^{d}\sim\operatorname{Bernoulli}(P_d)
+$$
+
+产生 detection，并在所有视点保持相同 `entity_id`。因此它能够满足多次确认条件，直接检验
+verification 是否能抵抗 persistent physical distractor。
+
+对 correlated false alarm，先为 episode 采样 common-mode indicator
+
+$$
+C\sim\operatorname{Bernoulli}(\rho).
+$$
+
+当 $C=1$ 时，所有非目标视点共享一次
+
+$$
+A\sim\operatorname{Bernoulli}(P_{FA});
+$$
+
+当 $C=0$ 时，各视点独立采样 $A_t\sim\operatorname{Bernoulli}(P_{FA})$。
+配置 shared identity 时，common-mode alarm 还共享同一 tracker ID。这是 exchangeable mixture
+模型，用来分离 event correlation 和 ordinary independent false alarms。
+
+定位误差使用 seed-deterministic 二维 Gaussian：
+
+$$
+\hat{\mathbf x}_t=\mathbf x_t+\boldsymbol\epsilon_t,
+\qquad
+\boldsymbol\epsilon_t\sim\mathcal N(\mathbf 0,\sigma_{loc}^{2}\mathbf I_2),
+$$
+
+$$
+e_{loc,t}=\|\boldsymbol\epsilon_t\|_2.
+$$
+
+只有 $e_{loc,t}\le e_{\max}$ 的 detection 才能作为 success confirmation 和 Bayesian positive
+evidence；否则该 viewpoint 作为没有有效 target detection 的 observation 更新。每次采样的
+source kind、entity ID、估计位置、误差和 localized cell 都写入 `sensor_trace`。
+
 ## 11. Episode-Level Metrics
 
 对第 $n$ 个 episode 定义 ground-truth success indicator
@@ -863,7 +907,8 @@ $$
 ## 17. 当前数学模型的边界
 
 1. 单目标、单占据单元 categorical belief，不是多目标随机有限集模型。
-2. Binary sensor model 假设固定 $P_D$ 和 $P_{FA}$；尚未按高度、距离、天气、遮挡和视角建模。
+2. V5 已覆盖 persistent distractor、episode-level correlated false alarm 和 Gaussian localization
+   error，但 $P_D$/$P_{FA}$ 仍未按高度、距离、天气、遮挡和视角变化。
 3. Candidate visibility 使用圆形 footprint，没有显式 ray casting 和 occlusion。
 4. Active utility 是 one-step myopic policy，不是完整 POMDP value function。
 5. LLM confidence 尚未经过 empirical calibration。

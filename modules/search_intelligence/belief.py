@@ -206,9 +206,12 @@ class BayesianBeliefUpdater:
         grid: SearchGrid,
         *,
         min_detection_confidence: float = 0.5,
+        max_localization_error_m: Optional[float] = None,
     ) -> BeliefUpdate:
         if not 0 <= min_detection_confidence <= 1:
             raise ValueError("min_detection_confidence must be within [0, 1]")
+        if max_localization_error_m is not None and max_localization_error_m < 0:
+            raise ValueError("max_localization_error_m must be non-negative")
         if not prior.probabilities:
             return BeliefUpdate(
                 posterior=BeliefMap({}, update_index=prior.update_index + 1),
@@ -237,7 +240,16 @@ class BayesianBeliefUpdater:
             for cell_id in observation.visible_cell_ids
             if cell_id in supported_ids
         ))
-        detections = observation.matching_detections(min_detection_confidence)
+        detections = tuple(
+            detection
+            for detection in observation.matching_detections(
+                min_detection_confidence
+            )
+            if _localization_is_acceptable(
+                detection,
+                max_localization_error_m,
+            )
+        )
         localized_ids = self._localized_detection_cells(detections, grid, supported_ids)
 
         if detections:
@@ -328,3 +340,13 @@ class BayesianBeliefUpdater:
                     posterior_probability / prior_probability
                 )
         return divergence
+
+
+def _localization_is_acceptable(
+    detection: Any,
+    maximum_error_m: Optional[float],
+) -> bool:
+    if maximum_error_m is None:
+        return True
+    error = detection.attributes.get("localization_error_m")
+    return error is not None and float(error) <= maximum_error_m

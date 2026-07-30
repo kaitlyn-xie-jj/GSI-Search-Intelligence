@@ -14,6 +14,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from modules.search_intelligence import (  # noqa: E402
     default_stress_profiles,
+    realism_stress_profiles,
     run_stress_benchmark,
     verification_stress_profiles,
     write_stress_benchmark_results,
@@ -24,7 +25,11 @@ def main() -> int:
     default_profiles = default_stress_profiles()
     available_profiles = {
         profile.profile_id: profile
-        for profile in default_profiles + verification_stress_profiles()
+        for profile in (
+            default_profiles
+            + verification_stress_profiles()
+            + realism_stress_profiles()
+        )
     }
     parser = argparse.ArgumentParser(
         description=(

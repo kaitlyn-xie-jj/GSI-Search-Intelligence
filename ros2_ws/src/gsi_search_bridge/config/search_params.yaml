@@ -10,6 +10,9 @@ gsi_search_node:
     flight_altitude_m: 20.0
     sensor_footprint_radius_m: 15.0
     max_viewpoints: 30
+    min_confirmations: 2
+    max_localization_error_m: 5.0
+    verification_followup_limit: 0
     sensor_detection_probability: 0.85
     sensor_false_positive_probability: 0.01
     position_tolerance_m: 0.75
@@ -27,6 +30,7 @@ gsi_search_node:
     battery_topic: /uav/battery_state
     goal_pose_topic: /gsi/uav/goal_pose
     outcome_topic: /gsi/search/outcome
+    trace_output_path: ""
 
 gsi_position_controller:
   ros__parameters:

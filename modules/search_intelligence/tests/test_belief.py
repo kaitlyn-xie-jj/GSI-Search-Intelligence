@@ -123,6 +123,24 @@ class BayesianBeliefTests(unittest.TestCase):
         self.assertEqual(update.evidence_type, "negative")
         self.assertLess(update.posterior.probabilities[self.cell_a], 0.5)
 
+    def test_excess_localization_error_is_not_positive_evidence(self):
+        detection = TargetDetection(
+            label="yellow van",
+            confidence=1.0,
+            estimated_position=(10.0, 10.0, 0.0),
+            attributes={"localization_error_m": 20.0},
+        )
+
+        update = self.updater.update(
+            self.prior,
+            self._observation(detections=(detection,)),
+            self.grid,
+            max_localization_error_m=10.0,
+        )
+
+        self.assertEqual(update.evidence_type, "negative")
+        self.assertLess(update.posterior.probabilities[self.cell_a], 0.5)
+
     def test_belief_rejects_cells_outside_searchable_grid(self):
         with self.assertRaises(ValueError):
             BeliefMap.for_grid(self.grid, {"unknown-cell": 1.0})

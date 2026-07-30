@@ -132,6 +132,9 @@ More details are available in
 [`ros2_ws/src/gsi_search_bridge/README.md`](ros2_ws/src/gsi_search_bridge/README.md)
 and
 [`ros2_ws/simulation/search_world_v1/README.md`](ros2_ws/simulation/search_world_v1/README.md).
+The 2026-07-30 clean-restart, PX4 preflight recovery, and live sensor-frame
+evidence is recorded in
+[`docs/zh/validation/gazebo-searchworld-v1-2026-07-30.md`](docs/zh/validation/gazebo-searchworld-v1-2026-07-30.md).
 
 The complete mathematical specification, policy equations, benchmark design,
 and statistical estimators are documented in
