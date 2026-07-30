@@ -1,0 +1,148 @@
+services:
+  gsi:
+    # 1. Build configuration
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    # 2. Container identification
+    container_name: gsi
+
+    # 3. GPU Resource Allocation
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    # 4. System Configuration
+    # Set IPC to host to prevent shared memory errors during PyTorch data loading
+    ipc: host
+
+    network_mode: "host"
+
+    # 5. Volume Mounts
+    volumes:
+      # A. Source Code Mount
+      # Maps the parent directory (..) of this file to /GSI inside the container
+      - ..:/GSI
+
+      # B. Hugging Face Cache (Models & Datasets)
+      # Persists cache to host to avoid re-downloading
+      - ~/.cache/huggingface:/home/unsloth/.cache/huggingface
+
+      # C. ModelScope Cache
+      - ~/.cache/modelscope:/home/unsloth/.cache/modelscope
+
+      # D. Local models
+      - /home/yons/Qwen3:/models
+
+
+    # 6. Environment Variables
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - HF_HOME=/home/unsloth/.cache/huggingface
+      - TZ=Asia/Shanghai
+      - HF_HUB_OFFLINE=1
+      - HF_DATASETS_OFFLINE=1
+
+    # 7. Runtime Configuration
+    # Keep container running in background
+    command: tail -f /dev/null
+    # Enable interactive mode (tty)
+    tty: true
+    stdin_open: true
+    # Set default working directory to the mounted project path
+    working_dir: /GSI
+
+  vllm_server:
+    build:
+      context: .
+      dockerfile: Dockerfile.vllm
+
+    container_name: vllm_server
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+
+    ipc: host
+
+    network_mode: "host"
+
+    volumes:
+      - ..:/GSI
+      - ~/.cache/huggingface:/root/.cache/huggingface
+
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - HF_HOME=/root/.cache/huggingface
+      - TZ=Asia/Shanghai
+
+    entrypoint: /bin/bash
+
+    command: -c "tail -f /dev/null"
+
+    tty: true
+    stdin_open: true
+    working_dir: /GSI
+
+  verl:
+    image: verlai/verl:vllm011.latest
+    container_name: verl
+
+    # 1. 网络模式：Host 模式
+    # 允许容器直接使用宿主机 IP 和端口，这对 Ray 集群通信至关重要
+    network_mode: "host"
+
+    # 2. 权限：允许使用 nsys 等性能分析工具
+    privileged: true
+
+    # 3. 共享内存：强烈建议直接使用 host
+    # 相比固定 shm_size，ipc: host 能动态利用宿主机所有可用内存，
+    # 彻底解决 Ray/NCCL 在多卡训练时的 Bus Error
+    ipc: host
+    # shm_size: '512gb'  # 如果用 ipc: host，这一行可以注释掉
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+
+    # 4. 关键修正：覆盖镜像默认的 Entrypoint
+    # 原镜像默认启动 vLLM server，会导致端口冲突且无法直接交互。
+    # 改为 /bin/bash 后，配合 command 的 tail -f，容器将后台静默运行。
+    entrypoint: /bin/bash
+    command: -c "tail -f /dev/null"
+
+    volumes:
+      # 代码挂载
+      - ${HOME}/GSI:/workspace/GSI
+      # 数据挂载
+      - ${HOME}/data:/root/data
+      # HF 缓存挂载 (加速模型加载)
+      - ${HOME}/.cache/huggingface:/root/.cache/huggingface
+
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NCCL_DEBUG=INFO
+      # 自动添加你的代码路径
+      - PYTHONPATH=/workspace/GSI/llm_finetune:$PYTHONPATH
+      - HF_HOME=/root/.cache/huggingface
+      - TZ=Asia/Shanghai
+      # 可选：如果遇到 Ray 启动报错，可以尝试强制指定 IP
+      # - RAY_ADDRESS=auto
+
+    working_dir: /workspace/GSI/llm_finetune
+    tty: true
+    stdin_open: true
+    restart: unless-stopped

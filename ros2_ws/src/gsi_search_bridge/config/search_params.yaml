@@ -1,0 +1,41 @@
+gsi_search_node:
+  ros__parameters:
+    target_query: yellow-van
+    area_id: gazebo-search-area
+    area_min_x_m: -50.0
+    area_min_y_m: -40.0
+    area_max_x_m: 50.0
+    area_max_y_m: 40.0
+    grid_resolution_m: 10.0
+    flight_altitude_m: 20.0
+    sensor_footprint_radius_m: 15.0
+    max_viewpoints: 30
+    sensor_detection_probability: 0.85
+    sensor_false_positive_probability: 0.01
+    position_tolerance_m: 0.75
+    velocity_tolerance_mps: 0.25
+    settle_time_s: 1.0
+    sensor_timeout_s: 0.5
+    maximum_sensor_skew_s: 0.25
+    odom_topic: /uav/odom
+    imu_topic: /uav/imu
+    rgb_topic: /uav/camera/image_raw
+    camera_info_topic: /uav/camera/camera_info
+    depth_topic: /uav/depth/image_raw
+    point_cloud_topic: /uav/lidar/points
+    detections_topic: /uav/detections
+    battery_topic: /uav/battery_state
+    goal_pose_topic: /gsi/uav/goal_pose
+    outcome_topic: /gsi/search/outcome
+
+gsi_position_controller:
+  ros__parameters:
+    odom_topic: /uav/odom
+    goal_pose_topic: /gsi/uav/goal_pose
+    command_velocity_topic: /uav/cmd_vel
+    position_gain: 0.8
+    yaw_gain: 1.0
+    maximum_xy_speed_mps: 5.0
+    maximum_z_speed_mps: 2.0
+    maximum_yaw_rate_rad_s: 1.0
+    position_tolerance_m: 0.3

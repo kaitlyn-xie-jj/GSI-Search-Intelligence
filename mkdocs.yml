@@ -1,0 +1,121 @@
+site_name: GSI
+site_description: GSI project documentation
+docs_dir: docs
+exclude_docs: |
+  /SGI_Architecture_Document.md
+  /architecture.md
+  /baseline_comparison.md
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - tables
+  - fenced_code
+extra:
+  alternate:
+    - name: English
+      link: /en/
+      lang: en
+    - name: 中文
+      link: /zh/
+      lang: zh
+nav:
+  - Home: index.md
+  - English Documentation:
+      - Home: en/index.md
+      - Getting Started:
+          - Overview: en/getting-started/overview.md
+          - Installation and Environment: en/getting-started/installation.md
+          - Quick Start: en/getting-started/quickstart.md
+          - Reproduce Results: en/getting-started/reproduce-results.md
+      - Concepts:
+          - Architecture: en/concepts/architecture.md
+          - Task and State: en/concepts/task-and-state.md
+          - Planner / Validator / Solver: en/concepts/planner-validator-solver.md
+          - Replan and New Case: en/concepts/replan-newcase.md
+          - Evaluation Metrics: en/concepts/evaluation-metrics.md
+      - Tutorials:
+          - Run a Single Task: en/tutorials/run-single-task.md
+          - Run Benchmark: en/tutorials/run-benchmark.md
+          - Use Hugging Face Models and Data: en/tutorials/use-hf-models-datasets.md
+          - Collect Replan Data: en/tutorials/collect-replan-data.md
+          - Evaluate a Model: en/tutorials/evaluate-model.md
+      - Training and Models:
+          - Training Overview: en/training/overview.md
+          - Hugging Face Preparation: en/training/huggingface-prepare.md
+          - SFT Training: en/training/sft.md
+          - RLVR Training: en/training/rlvr.md
+          - vLLM Evaluation: en/training/vllm-eval.md
+          - Output Directory: en/training/outputs.md
+      - Development:
+          - Repository Layout: en/development/repo-layout.md
+          - Add a Task: en/development/add-new-task.md
+          - Add a Solver Backend: en/development/add-new-solver-backend.md
+          - Add a Planner Backend: en/development/add-new-planner-backend.md
+          - Add a Validator Rule: en/development/add-new-validator-rule.md
+          - Development Guidelines: en/development/coding-guidelines.md
+      - Reference:
+          - Configuration: en/reference/config.md
+          - CLI and Scripts: en/reference/cli.md
+          - Environment Variables: en/reference/environment-variables.md
+          - Data Format: en/reference/data-format.md
+          - Models and Datasets: en/reference/models-and-datasets.md
+      - Troubleshooting:
+          - GPU and vLLM: en/troubleshooting/gpu-and-vllm.md
+          - Ray and Checkpoint: en/troubleshooting/ray-and-checkpoint.md
+          - Solver: en/troubleshooting/solver.md
+          - Hugging Face Cache: en/troubleshooting/huggingface-cache.md
+          - Training Failures: en/troubleshooting/training-failures.md
+  - 中文文档:
+      - 首页: zh/index.md
+      - 快速开始:
+          - 项目概览: zh/getting-started/overview.md
+          - 安装与环境: zh/getting-started/installation.md
+          - 快速跑通: zh/getting-started/quickstart.md
+          - 复现实验结果: zh/getting-started/reproduce-results.md
+      - 核心概念:
+          - 系统架构: zh/concepts/architecture.md
+          - Task 与 State: zh/concepts/task-and-state.md
+          - Planner / Validator / Solver: zh/concepts/planner-validator-solver.md
+          - Replan 与 New Case: zh/concepts/replan-newcase.md
+          - 评估指标: zh/concepts/evaluation-metrics.md
+      - 教程:
+          - 运行单个任务: zh/tutorials/run-single-task.md
+          - 运行 Benchmark: zh/tutorials/run-benchmark.md
+          - 使用 Hugging Face 模型和数据: zh/tutorials/use-hf-models-datasets.md
+          - 采集 Replan 数据: zh/tutorials/collect-replan-data.md
+          - 评估模型: zh/tutorials/evaluate-model.md
+      - 训练与模型:
+          - 训练概览: zh/training/overview.md
+          - Hugging Face 准备: zh/training/huggingface-prepare.md
+          - SFT 训练: zh/training/sft.md
+          - RLVR 训练: zh/training/rlvr.md
+          - vLLM 评估: zh/training/vllm-eval.md
+          - 输出目录: zh/training/outputs.md
+      - 开发者指南:
+          - 仓库结构: zh/development/repo-layout.md
+          - 新增任务: zh/development/add-new-task.md
+          - 新增 Solver 后端: zh/development/add-new-solver-backend.md
+          - 新增 Planner 后端: zh/development/add-new-planner-backend.md
+          - 新增 Validator 规则: zh/development/add-new-validator-rule.md
+          - 开发约定: zh/development/coding-guidelines.md
+      - 参考:
+          - 配置说明: zh/reference/config.md
+          - CLI 与脚本: zh/reference/cli.md
+          - 环境变量: zh/reference/environment-variables.md
+          - 数据格式: zh/reference/data-format.md
+          - 模型与数据集: zh/reference/models-and-datasets.md
+      - 故障排查:
+          - GPU 与 vLLM: zh/troubleshooting/gpu-and-vllm.md
+          - Ray 与 Checkpoint: zh/troubleshooting/ray-and-checkpoint.md
+          - Solver: zh/troubleshooting/solver.md
+          - Hugging Face Cache: zh/troubleshooting/huggingface-cache.md
+          - 训练失败: zh/troubleshooting/training-failures.md

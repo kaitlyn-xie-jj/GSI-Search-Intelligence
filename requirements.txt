@@ -1,0 +1,53 @@
+# =============================================================================
+# GSI Requirements
+# =============================================================================
+#
+# Installation order:
+#   1. Install PyTorch FIRST (with appropriate CUDA version for your system)
+#   2. Then install the rest: pip install -r requirements.txt
+#
+# PyTorch installation (not included here — install manually before this file):
+#   For CUDA 12.1:
+#     pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cu121
+#   For CUDA 12.4:
+#     pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cu124
+#   For the latest supported CUDA (e.g. 13.0):
+#     pip install torch --index-url https://download.pytorch.org/whl/cu130
+#   See https://pytorch.org/get-started/locally/ for other combinations.
+#
+# Solver backend (choose one):
+#   - Gurobi (recommended): pip install gurobipy (requires license, see README)
+#   - SCIP (open-source):   pip install pyscipopt
+#     Then set: export GSI_TANGO_SOLVER_BACKEND=scip
+#
+# =============================================================================
+
+# --- Core ---
+numpy>=1.24.0
+scipy>=1.10.0
+pandas>=2.0.0
+networkx>=3.0
+shapely>=2.0.0
+matplotlib>=3.7.0
+pillow>=10.0.0
+tqdm>=4.60.0
+PyYAML>=6.0
+noise>=1.2.2
+
+# --- LLM / API ---
+openai>=1.0.0
+httpx>=0.24.0
+tenacity>=8.2.0
+pydantic>=2.0.0
+
+# --- Web server (plan validation service) ---
+fastapi>=0.100.0
+uvicorn>=0.22.0
+
+# --- Dataset / HuggingFace ---
+datasets>=2.14.0
+huggingface_hub>=0.19.0
+
+# --- Solver (install at least one) ---
+gurobipy>=10.0.0       # Uncomment if using Gurobi (requires license)
+pyscipopt>=4.0.0       # Uncomment if using SCIP (open-source)

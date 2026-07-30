@@ -1,0 +1,21 @@
+"api_base": {
+ "GPT": "https://openrouter.ai/api/v1", # https://openrouter.ai/api/v1, https://vip.DMXapi.com/v1, https://aiapi.world/v1
+ "VLM": "https://xiaoai.plus/v1",
+ "QWEN": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+}
+"api_key": {
+ "GPT": "xxxx",
+ "VLM": "xxxx",
+ "QWEN": "xxxx",
+ "CLAUDE": "xxxx"
+}
+"model": {
+ "VLM": "gpt-4o",
+ "GPT": "google/gemini-3-flash-preview", # gemini-3.1-pro-preview，google/gemini-3-flash-preview
+ "QWEN": "qwen-vl-plus",
+ "CLAUDE": "xxxx"
+}
+
+# base
+# local: http://localhost:8001/v1
+# openrouter: https://openrouter.ai/api/v1

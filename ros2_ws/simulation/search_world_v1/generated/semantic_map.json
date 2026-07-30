@@ -1,0 +1,232 @@
+{
+  "coordinate_frame": "ENU",
+  "metadata": {
+    "generator": "gsi_search_bridge.search_world_generator",
+    "ground_truth_excluded": true,
+    "seed": 17
+  },
+  "nodes": [
+    {
+      "id": "parking-west",
+      "properties": {
+        "category": "area",
+        "description": "SearchWorld V1 parking region",
+        "label": "parking-west",
+        "passability": "open",
+        "type": "parking",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          -4.0,
+          -7.5
+        ],
+        "min_corner": [
+          -36.0,
+          -26.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "loading-east",
+      "properties": {
+        "category": "area",
+        "description": "SearchWorld V1 loading zone region",
+        "label": "loading-east",
+        "passability": "open",
+        "type": "loading_zone",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          36.0,
+          -7.5
+        ],
+        "min_corner": [
+          4.0,
+          -26.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "park-northwest",
+      "properties": {
+        "category": "area",
+        "description": "SearchWorld V1 park region",
+        "label": "park-northwest",
+        "passability": "open",
+        "type": "park",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          -4.0,
+          26.0
+        ],
+        "min_corner": [
+          -36.0,
+          7.5
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "campus-northeast",
+      "properties": {
+        "category": "area",
+        "description": "SearchWorld V1 campus region",
+        "label": "campus-northeast",
+        "passability": "open",
+        "type": "campus",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          36.0,
+          26.0
+        ],
+        "min_corner": [
+          4.0,
+          7.5
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "road-main",
+      "properties": {
+        "category": "trans_facility",
+        "description": "SearchWorld V1 road region",
+        "label": "road-main",
+        "passability": "open",
+        "type": "road",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          40.0,
+          5.5
+        ],
+        "min_corner": [
+          -40.0,
+          -5.5
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "entrance-east",
+      "properties": {
+        "category": "area",
+        "description": "SearchWorld V1 building entrance region",
+        "label": "entrance-east",
+        "passability": "open",
+        "type": "building_entrance",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          16.0,
+          16.0
+        ],
+        "min_corner": [
+          4.0,
+          7.5
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "restricted-northeast",
+      "properties": {
+        "category": "area",
+        "description": "SearchWorld V1 restricted zone region",
+        "label": "restricted-northeast",
+        "passability": "restricted",
+        "type": "restricted_zone",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          36.0,
+          26.0
+        ],
+        "min_corner": [
+          25.0,
+          15.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "office-main",
+      "properties": {
+        "category": "building",
+        "description": "Physical building footprint",
+        "label": "office-main",
+        "passability": "restricted",
+        "type": "office_building",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          31.0,
+          24.5
+        ],
+        "min_corner": [
+          15.0,
+          15.5
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "service-building",
+      "properties": {
+        "category": "building",
+        "description": "Physical building footprint",
+        "label": "service-building",
+        "passability": "restricted",
+        "type": "service_building",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          34.5,
+          14.0
+        ],
+        "min_corner": [
+          23.5,
+          7.0
+        ],
+        "type": "rectangle"
+      }
+    }
+  ],
+  "schema_version": "1.0",
+  "search_area": {
+    "coords": [
+      [
+        -40.0,
+        -30.0
+      ],
+      [
+        40.0,
+        -30.0
+      ],
+      [
+        40.0,
+        30.0
+      ],
+      [
+        -40.0,
+        30.0
+      ]
+    ],
+    "kind": "rectangle"
+  },
+  "units": "meters",
+  "world_name": "gsi_search_world_v1"
+}

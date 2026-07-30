@@ -1,0 +1,83 @@
+{
+  "planner_mode": "full",
+  "llm_temperature": 1.0,
+  "default_robot_types": ["UAV", "UGV", "Quadruped", "Humanoid"],
+  "enable_detailed_print": true,
+  "simulate_time_delay": false,
+  "enable_visualization": false,
+  "enable_video_recording": false,
+  "fine_grained_simulation": true,
+  "max_concurrency": 20,
+  "enable_logging": false,
+  "enable_checkpointing": false,
+  "collect_replan_dataset": false,
+  "enable_new_case_generation": false,
+  "enable_replanning": true,
+  "max_newcases_per_run": 5,
+  "new_case_mode": "aggregate",
+  "newcase_spacing_factor": 1.0,
+  "newcase_cooldown_rounds": 2,
+  "newcase_similarity_threshold": 0.8,
+  "newcase_similarity_damping": 0.3,
+  "repo_id": "WindyLab/GSI",
+  "platform_type": "semantic",
+  "unreal_platform": {
+    "base_url": "http://localhost:8080",
+    "timeout": 30.0,
+    "polling_interval": 0.5
+  },
+  "replay_mode": {
+      "enabled": false,
+      "trace_root": "results/unreal_examples/emergency_num_1/traffic_enforcement_no_strict_cybertown_scenario_1_g_1",       
+      "trace_tag": "default" 
+  },
+  "human_in_loop": {
+    "enabled": false,
+    "instruction_enabled": false,
+    "review_enabled": false,
+    "decision_enabled": true,
+    "instruction_timeout": 300.0,
+    "review_timeout": 600.0,
+    "decision_timeout": 120.0,
+    "server_port": 8081,
+    "retry_count": 3,
+    "retry_delay": 1.0
+  },
+  "solver_type": "sgi",
+  "solver_config": {
+    "sgi": {
+      "max_steps": 8,
+      "model_family": null,
+      "model_name_override": null,
+      "validate_plan": true
+    },
+    "llamar": {
+      "max_steps": 10,
+      "model_family": null,
+      "model_name_override": null,
+      "use_few_shot": false
+    },
+    "spine": {
+      "max_steps": 8,
+      "model_family": null,
+      "model_name_override": null,
+      "use_few_shot": false,
+      "n_attempts": 3
+    },
+    "lipllm": {
+      "max_steps": 8,
+      "model_family": null,
+      "model_name_override": null,
+      "use_few_shot": false,
+      "n_attempts": 5,
+      "max_iterations": 8,
+      "alpha": 0.3
+    },
+    "smartllm": {
+      "max_steps": 8,
+      "model_family": null,
+      "model_name_override": null,
+      "use_few_shot": false
+    }
+  }
+}

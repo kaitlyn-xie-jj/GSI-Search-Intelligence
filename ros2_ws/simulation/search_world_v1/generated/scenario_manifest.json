@@ -1,0 +1,70 @@
+{
+  "artifacts": {
+    "gz_bridge": {
+      "filename": "gz_bridge.yaml",
+      "sha256": "152a66f09f2a014a2d891f53d5d2d5a174468b8d39ed684ae8cde147af60222d"
+    },
+    "search_params": {
+      "filename": "search_params.yaml",
+      "sha256": "af5e5dd857bd63f18ca10e84a20d406d780a96a82bd16c70d381b2eda1b11f92"
+    },
+    "search_prior": {
+      "filename": "search_prior.json",
+      "sha256": "991ef0b4f134c6e93557c116f62c72dcab060f250277d5d0a39b2152540bec49"
+    },
+    "semantic_map": {
+      "filename": "semantic_map.json",
+      "sha256": "7789230dc0473ac7012af63801b5c51ddd334d24283824b8a29e2907c4eeef25"
+    },
+    "visionflow_profile": {
+      "filename": "visionflow_profile.conf",
+      "sha256": "2ac6dccc50405d602d57e91580d70b649be6196eb0fc95d39cb4af34eaa2e0da"
+    },
+    "world": {
+      "filename": "gsi_search_world_v1.sdf",
+      "sha256": "7490b0374998a382dea3b00b45295d7b80ba94071a1b9a443aedb7852ece8e25"
+    }
+  },
+  "complexity": {
+    "building_count": 2,
+    "container_count": 6,
+    "parked_vehicle_count": 8,
+    "semantic_region_count": 7,
+    "tree_count": 12
+  },
+  "coordinate_frame": "ENU",
+  "ground_truth_policy": "evaluator-only; never load into search policy",
+  "private_artifacts": {
+    "ground_truth": {
+      "filename": "ground_truth.json",
+      "sha256": "32e937b7df9a68fdeac9371476ea723bafe6b50447b26b82c1077117be1c7df9"
+    }
+  },
+  "scenario_id": "gsi_search_world_v1",
+  "schema_version": "1.0",
+  "search_area": {
+    "coords": [
+      [
+        -40.0,
+        -30.0
+      ],
+      [
+        40.0,
+        -30.0
+      ],
+      [
+        40.0,
+        30.0
+      ],
+      [
+        -40.0,
+        30.0
+      ]
+    ],
+    "kind": "rectangle"
+  },
+  "seed": 17,
+  "target_query": "yellow-van",
+  "target_slot_count": 4,
+  "units": "meters"
+}

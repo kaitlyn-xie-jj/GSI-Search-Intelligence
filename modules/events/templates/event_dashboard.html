@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event System Dashboard</title>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .status-bar {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .status-card {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            min-width: 200px;
+            margin: 10px;
+            text-align: center;
+        }
+        
+        .status-card h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1.2em;
+        }
+        
+        .status-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .panel {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .panel h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        
+        .event-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .event-item {
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            background: rgba(102, 126, 234, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .event-item:hover {
+            transform: translateX(5px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .event-type {
+            font-weight: bold;
+            color: #667eea;
+            font-size: 0.9em;
+        }
+        
+        .event-message {
+            margin: 5px 0;
+            color: #333;
+        }
+        
+        .event-time {
+            font-size: 0.8em;
+            color: #666;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 20px;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .input-group input, .input-group select {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+        
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .full-width {
+            grid-column: 1 / -1;
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .status-bar {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .controls {
+                flex-direction: column;
+            }
+        }
+        
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            border-radius: 25px;
+            color: white;
+            font-weight: bold;
+            z-index: 1000;
+        }
+        
+        .connected {
+            background: #4CAF50;
+        }
+        
+        .disconnected {
+            background: #f44336;
+        }
+    </style>
+</head>
+<body>
+    <div class="connection-status" id="connectionStatus">Connecting...</div>
+    
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Event System Dashboard</h1>
+            <p>Real-time monitoring of system event flow and performance metrics</p>
+        </div>
+        
+        <div class="status-bar">
+            <div class="status-card">
+                <h3>📊 Total Events</h3>
+                <div class="status-value" id="totalEvents">0</div>
+            </div>
+            <div class="status-card">
+                <h3>⚡ Events/Sec</h3>
+                <div class="status-value" id="eventsPerSecond">0</div>
+            </div>
+            <div class="status-card">
+                <h3>👥 Active Subscriptions</h3>
+                <div class="status-value" id="activeSubscriptions">0</div>
+            </div>
+            <div class="status-card">
+                <h3>🔄 System Status</h3>
+                <div class="status-value" id="systemStatus">Running</div>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div class="panel">
+                <h2>📝 Real-time Event Stream</h2>
+                <div class="controls">
+                    <button class="btn" onclick="clearEvents()">Clear Events</button>
+                    <button class="btn" onclick="toggleAutoScroll()">Auto Scroll: <span id="autoScrollStatus">On</span></button>
+                </div>
+                <div class="event-list" id="eventList">
+                    <div class="event-item">
+                        <div class="event-type">System</div>
+                        <div class="event-message">Waiting for event data...</div>
+                        <div class="event-time">{{ "Waiting for connection..." }}</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <h2>📈 Event Statistics Chart</h2>
+                <div class="chart-container">
+                    <canvas id="eventChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="panel full-width">
+                <h2>🎮 Event Testing Tools</h2>
+                <div class="controls">
+                    <div class="input-group">
+                        <select id="eventType">
+                            <option value="system">System Event</option>
+                            <option value="task">Task Event</option>
+                            <option value="user">User Event</option>
+                        </select>
+                        <input type="text" id="eventMessage" placeholder="Event message" value="Test event">
+                        <button class="btn" onclick="publishTestEvent()">Publish Test Event</button>
+                    </div>
+                    <div class="input-group">
+                        <button class="btn" onclick="getSystemStats()">Get System Stats</button>
+                        <button class="btn" onclick="getSubscriptions()">View Subscriptions</button>
+                        <button class="btn" onclick="startStressTest()">Stress Test</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // WebSocket connection
+        const socket = io();
+        let autoScroll = true;
+        let eventCount = 0;
+        let eventsPerSecondCount = 0;
+        let chart;
+        let chartData = {
+            labels: [],
+            datasets: [{
+                label: 'Event Count',
+                data: [],
+                borderColor: '#667eea',
+                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                tension: 0.4
+            }]
+        };
+        
+        // Initialize chart
+        function initChart() {
+            const ctx = document.getElementById('eventChart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Update chart
+        function updateChart() {
+            const now = new Date().toLocaleTimeString();
+            chartData.labels.push(now);
+            chartData.datasets[0].data.push(eventsPerSecondCount);
+            
+            // Keep last 20 data points
+            if (chartData.labels.length > 20) {
+                chartData.labels.shift();
+                chartData.datasets[0].data.shift();
+            }
+            
+            chart.update();
+            eventsPerSecondCount = 0;
+        }
+        
+        // Socket event handlers
+        socket.on('connect', function() {
+            document.getElementById('connectionStatus').textContent = 'Connected';
+            document.getElementById('connectionStatus').className = 'connection-status connected';
+        });
+        
+        socket.on('disconnect', function() {
+            document.getElementById('connectionStatus').textContent = 'Disconnected';
+            document.getElementById('connectionStatus').className = 'connection-status disconnected';
+        });
+        
+        socket.on('new_event', function(data) {
+            addEventToList(data);
+            updateStats();
+        });
+        
+        socket.on('stats_update', function(data) {
+            updateStatsDisplay(data);
+        });
+        
+        // Add event to list
+        function addEventToList(eventData) {
+            const eventList = document.getElementById('eventList');
+            const eventItem = document.createElement('div');
+            eventItem.className = 'event-item';
+            
+            const eventType = eventData.event_type || 'Unknown';
+            const message = eventData.message || eventData.title || 'No message';
+            const timestamp = new Date().toLocaleString();
+            
+            eventItem.innerHTML = `
+                <div class="event-type">${eventType}</div>
+                <div class="event-message">${message}</div>
+                <div class="event-time">${timestamp}</div>
+            `;
+            
+            eventList.insertBefore(eventItem, eventList.firstChild);
+            
+            // Limit displayed event count
+            while (eventList.children.length > 100) {
+                eventList.removeChild(eventList.lastChild);
+            }
+            
+            if (autoScroll) {
+                eventList.scrollTop = 0;
+            }
+            
+            eventCount++;
+            eventsPerSecondCount++;
+        }
+        
+        // Update statistics
+        function updateStats() {
+            document.getElementById('totalEvents').textContent = eventCount;
+        }
+        
+        function updateStatsDisplay(stats) {
+            document.getElementById('activeSubscriptions').textContent = stats.subscriptions || 0;
+            document.getElementById('systemStatus').textContent = stats.status || 'Running';
+        }
+        
+        // Control functions
+        function clearEvents() {
+            document.getElementById('eventList').innerHTML = '';
+            eventCount = 0;
+            updateStats();
+        }
+        
+        function toggleAutoScroll() {
+            autoScroll = !autoScroll;
+            document.getElementById('autoScrollStatus').textContent = autoScroll ? 'On' : 'Off';
+        }
+        
+        function publishTestEvent() {
+            const eventType = document.getElementById('eventType').value;
+            const message = document.getElementById('eventMessage').value;
+            
+            socket.emit('publish_test_event', {
+                event_type: eventType,
+                message: message,
+                source: 'web_ui_test'
+            });
+        }
+        
+        function getSystemStats() {
+            socket.emit('get_stats');
+        }
+        
+        function getSubscriptions() {
+            socket.emit('get_subscriptions');
+        }
+        
+        function startStressTest() {
+            socket.emit('start_stress_test', {duration: 10, events_per_second: 5});
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            initChart();
+            
+            // Update chart every second
+            setInterval(updateChart, 1000);
+            
+            // Update events per second display every second
+            setInterval(function() {
+                document.getElementById('eventsPerSecond').textContent = eventsPerSecondCount;
+            }, 1000);
+            
+            // Request initial statistics
+            setTimeout(getSystemStats, 1000);
+        });
+    </script>
+</body>
+</html>

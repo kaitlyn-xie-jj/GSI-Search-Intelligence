@@ -1,0 +1,103 @@
+ARG BASE_IMAGE=verlai/verl:vllm011.latest
+FROM ${BASE_IMAGE}
+
+LABEL org.opencontainers.image.title="GSI runtime/training dependencies"
+LABEL org.opencontainers.image.description="Runtime-only GSI training image. Mount the repository, data, models, and outputs at container start."
+
+ENV HF_HOME=/root/.cache/huggingface
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV PYTHONUNBUFFERED=1
+ENV ROOT_DIR=/GSI
+ENV PYTHONPATH=/GSI:/GSI/llm_finetune/verl_scripts/verl
+ENV NO_PROXY=127.0.0.1,localhost
+ENV no_proxy=127.0.0.1,localhost
+ENV UNSLOTH_COMPILE_LOCATION=/tmp/unsloth_compiled_cache
+
+WORKDIR /GSI
+
+RUN python -m pip install --no-cache-dir --no-deps \
+      peft==0.19.1 \
+      cut_cross_entropy==25.1.1 \
+      tyro==1.0.13 \
+      docstring-parser==0.18.0 \
+      shtab==1.8.0 \
+      typeguard==4.5.2 \
+      unsloth==2026.4.8 \
+      unsloth_zoo==2026.4.8 \
+      xformers \
+      trl \
+      sentencepiece \
+      tensorboard==2.20.0 \
+      absl-py \
+      grpcio \
+      markdown \
+      tensorboard-data-server \
+      werkzeug \
+      protobuf \
+      vllm==0.11.* \
+      filelock \
+      fsspec \
+      huggingface-hub \
+      packaging \
+      safetensors \
+      aiohappyeyeballs \
+      aiohttp \
+      aiosignal \
+      annotated-types \
+      anyio \
+      attrs \
+      certifi \
+      charset-normalizer \
+      click \
+      distro \
+      fastapi \
+      h11 \
+      httpcore \
+      httpx \
+      idna \
+      jiter \
+      openai \
+      pydantic \
+      pydantic-core \
+      frozenlist \
+      multidict \
+      propcache \
+      sniffio \
+      starlette \
+      typing-extensions \
+      typing-inspection \
+      urllib3 \
+      yarl \
+      uvicorn \
+      requests \
+      tenacity \
+      pandas \
+      python-dateutil \
+      pytz \
+      six \
+      tzdata \
+      pyarrow \
+      numpy \
+      scipy \
+      scikit-learn \
+      narwhals \
+      joblib \
+      threadpoolctl \
+      tqdm \
+      matplotlib \
+      contourpy \
+      cycler \
+      fonttools \
+      kiwisolver \
+      pillow \
+      pyparsing \
+      networkx \
+      shapely \
+      pyyaml \
+      pyscipopt \
+      pulp \
+      gurobipy==13.0.2
+
+RUN mkdir -p /GSI /models /outputs /tmp/ray /tmp/unsloth_compiled_cache
+
+CMD ["bash"]

@@ -1,0 +1,23 @@
+{
+  "planner_mode": "full",
+  "default_robot_types": ["UAV", "UGV", "Quadruped", "Humanoid"],
+  "enable_detailed_print": false,
+  "simulate_time_delay": false,
+  "enable_visualization": false,
+  "enable_video_recording": false,
+  "fine_grained_simulation": true,
+  "max_concurrency": 50,
+  "enable_logging": false,
+  "enable_checkpointing": false,
+  "collect_replan_dataset": false,
+  "enable_new_case_generation": false,
+  "enable_replanning": false,
+  "max_newcases_per_run": 3,
+  "new_case_mode": "aggregate",
+  "repo_id": "WindyLab/GSI",
+  "replay_mode": {
+      "enabled": false,       
+      "trace_root": "batch_runs/batch_2025-12-02_19-55-12/0008_cybertown_scenario_1_g_7/",       
+      "trace_tag": "default" 
+  }
+}

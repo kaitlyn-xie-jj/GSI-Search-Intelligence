@@ -1,0 +1,41 @@
+services:
+  gsi-train:
+    image: gsi-train-runtime:unsloth-verl-20260522
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.runtime-train
+      args:
+        BASE_IMAGE: ${GSI_RUNTIME_BASE_IMAGE:-verlai/verl:vllm011.latest}
+    network_mode: "host"
+    ipc: host
+    shm_size: "64gb"
+    working_dir: /GSI
+    stdin_open: true
+    tty: true
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - HF_HOME=/root/.cache/huggingface
+      - HTTP_PROXY
+      - HTTPS_PROXY
+      - http_proxy
+      - https_proxy
+      - NO_PROXY=127.0.0.1,localhost
+      - no_proxy=127.0.0.1,localhost
+      # Pass SFT/RLVR variables with `docker compose run -e KEY=VALUE`.
+    volumes:
+      - ${GSI_REPO_ROOT:-..}:/GSI
+      - ${GSI_MODEL_ROOT:-../models}:/models:ro
+      - ${GSI_DATA_ROOT:-../data}:/GSI/data:ro
+      - ${GSI_DATASET_ROOT:-../dataset}:/GSI/dataset:ro
+      - ${GSI_OUTPUT_ROOT:-../outputs/docker_runtime_train}:/GSI/outputs
+      - ${HF_CACHE_ROOT:-../hf_cache}:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    entrypoint: ["/GSI/llm_finetune/scripts/runtime/entrypoint.sh"]
+    command: ["bash"]

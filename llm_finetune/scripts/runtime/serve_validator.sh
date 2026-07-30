@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="${ROOT_DIR:-/GSI}"
+cd "${ROOT_DIR}"
+
+export PYTHONPATH="${ROOT_DIR}:${ROOT_DIR}/llm_finetune/verl_scripts/verl:${PYTHONPATH:-}"
+export GSI_REPLAN_STATE_ROOT="${GSI_REPLAN_STATE_ROOT:-${ROOT_DIR}/data/rlvr_gsi}"
+export GSI_VALIDATOR_HOST="${GSI_VALIDATOR_HOST:-127.0.0.1}"
+export GSI_VALIDATOR_PORT="${GSI_VALIDATOR_PORT:-8000}"
+export GSI_VALIDATOR_MAX_WORKERS="${GSI_VALIDATOR_MAX_WORKERS:-4}"
+export GSI_VALIDATOR_BATCH_CHUNK_SIZE="${GSI_VALIDATOR_BATCH_CHUNK_SIZE:-4}"
+export GSI_VALIDATOR_TIMEOUT="${GSI_VALIDATOR_TIMEOUT:-180}"
+export GSI_VALIDATOR_HEALTH_TIMEOUT="${GSI_VALIDATOR_HEALTH_TIMEOUT:-180}"
+export GSI_VALIDATOR_RUNTIME_DIR="${GSI_VALIDATOR_RUNTIME_DIR:-${ROOT_DIR}/outputs/runtime}"
+export GSI_VALIDATOR_LOG_DIR="${GSI_VALIDATOR_LOG_DIR:-${ROOT_DIR}/outputs/logs}"
+
+exec "${ROOT_DIR}/llm_finetune/scripts/runtime/internal/serve_gsi_validator.sh" "$@"

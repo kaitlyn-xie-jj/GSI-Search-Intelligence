@@ -1,0 +1,37 @@
+{
+  "default_scenario_type": "cybertown",
+  "default_scenario_id": "scenario_1",
+  "default_workspace_root": "./results/plan_validation_results",
+  "planner_mode": "full",
+  "default_robot_types": ["UAV", "UGV", "Quadruped", "Humanoid"],
+  "timeout_seconds": 60,
+  "max_concurrent_validations": 8,
+  "enable_detailed_logging": false,
+  "enable_new_case_generation": false,
+  "enabled_validators": {
+    "planning_time_syntax": true,
+    "planning_time_validity": true,
+    "planning_time_capability": true,
+    "planning_time_dependencies": true,
+    "planning_time_empty": true,
+    "planning_time_allocation": true,
+    "execution_time_precondition": true,
+    "post_execution_skill": true,
+    "post_execution_time": true,
+    "task_level_success": true,
+    "task_level_failure": true
+  },
+  "feedback_rewards": {
+    "planning_time_syntax": -10.0,
+    "planning_time_validity": -8.0,
+    "planning_time_capability": -7.0,
+    "planning_time_dependencies": -6.0,
+    "planning_time_empty": -5.0,
+    "planning_time_allocation": -3.0,
+    "execution_time_precondition": -1.0,
+    "post_execution_skill": -2.0,
+    "post_execution_time": 0.0,
+    "task_level_success": 10.0,
+    "task_level_failure": -1.0
+  }
+}

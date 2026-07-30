@@ -1,0 +1,14 @@
+from enum import IntEnum
+
+class ModelType(IntEnum):
+    TEAMPLANNER_DET = 0
+    TEAMPLANNER_CONDET = 1
+
+class SymbolType(IntEnum):
+    TEAMPLANNER_VEHC = 0
+    TEAMPLANNER_NODE = 1
+    TEAMPLANNER_TASK = 2
+    TEAMPLANNER_PATH = 3
+    TEAMPLANNER_AND = 4
+    TEAMPLANNER_OR = 5
+    TEAMPLANNER_VEHCTYPE = 6

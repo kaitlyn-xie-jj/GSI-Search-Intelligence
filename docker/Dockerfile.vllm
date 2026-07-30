@@ -1,0 +1,19 @@
+# 1. 指定 vLLM 官方镜像作为基础
+FROM vllm/vllm-openai:v0.11.1
+
+USER root
+RUN apt-get update && apt-get install -y \
+    git \
+    vim \
+    htop \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /vllm_workspace
+
+RUN pip install --no-cache-dir \
+    pandas==2.3.3 \
+    datasets==4.4.1
+
+
+USER root
