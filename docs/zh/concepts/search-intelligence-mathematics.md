@@ -103,8 +103,8 @@ $$
 候选视点的可见单元集合为
 
 $$
-V(v)=\left\{c_i\in\mathcal C:\
-\sqrt{(\bar x_i-x_v)^2+(\bar y_i-y_v)^2}\le R_f\right\}.
+V(v)=\{c_i\in\mathcal C:
+\sqrt{(\bar x_i-x_v)^2+(\bar y_i-y_v)^2}\le R_f\}.
 $$
 
 当前候选生成器使用圆形地面 footprint；真实相机标定、遮挡和 terrain occlusion 尚未进入该公式。
@@ -349,7 +349,7 @@ $$
 个等距子段。每个 viewpoint 的 yaw 由下一点方向得到：
 
 $$
-\psi_k=\operatorname{atan2}(y_{k+1}-y_k,x_{k+1}-x_k).
+\psi_k=\mathrm{atan2}(y_{k+1}-y_k,x_{k+1}-x_k).
 $$
 
 实现还支持 circle chord coverage、polyline band coverage、line back-and-forth 和 point spiral；
@@ -360,7 +360,7 @@ $$
 Random baseline 对每个未访问候选 $v$ 计算稳定 hash key：
 
 $$
-k(v)=\operatorname{SHA256}(\text{seed}:\text{candidate\_id}(v)),
+k(v)=\mathrm{SHA256}(\mathrm{seed}:\mathrm{candidateId}(v)),
 $$
 
 然后按 $k(v)$ 的 byte order 排序。它是 seeded、可复现的随机排列，不读取 belief。
@@ -416,7 +416,7 @@ $$
 其中 $h(0)=h(1)=0$。候选观测的信息增益是 mutual information：
 
 $$
-\operatorname{IG}(v)=I(Y_v;Z_v)
+\mathrm{IG}(v)=I(Y_v;Z_v)
 =H(Z_v)-H(Z_v\mid Y_v).
 $$
 
@@ -426,13 +426,13 @@ $P(Z_v=1\mid Y_v=0)=P_{FA}$，所以
 
 $$
 \boxed{
-\operatorname{IG}(v)
+\mathrm{IG}(v)
 =h(q_v)-p_vh(P_D)-(1-p_v)h(P_{FA})
 }
 $$
 
 单位为 nat。实现对浮点误差使用
-$\operatorname{IG}(v)\leftarrow\max(0,\operatorname{IG}(v))$。
+$\mathrm{IG}(v)\leftarrow\max(0,\mathrm{IG}(v))$。
 
 #### Novelty
 
@@ -466,7 +466,7 @@ $$
 \boxed{
 U_{\mathrm{active}}(v)=
 \lambda_{\mathrm{det}}q_v
-+\lambda_{\mathrm{IG}}\operatorname{IG}(v)
++\lambda_{\mathrm{IG}}\mathrm{IG}(v)
 +\lambda_{\mathrm{nov}}N_t(v)
 -\lambda_{\mathrm{travel}}C_d(v)
 }
@@ -537,15 +537,15 @@ Benchmark 同时区分系统声明成功 `declared_found` 与 ground-truth succe
 对 scenario $s$、repetition $r$ 使用稳定 seed：
 
 $$
-\xi_{s,r}=\operatorname{UInt64}
-\left(\operatorname{SHA256}(\text{base seed}:s:r)_{1:8}\right).
+\xi_{s,r}=\mathrm{UInt64}
+\left(\mathrm{SHA256}(\text{base seed}:s:r)_{1:8}\right).
 $$
 
 一次 sensor sample 由
 
 $$
-u=\frac{\operatorname{UInt64}
-(\operatorname{SHA256}(\xi_{s,r}:s:\text{viewpoint key}:\text{sensor})_{1:8})}
+u=\frac{\mathrm{UInt64}
+(\mathrm{SHA256}(\xi_{s,r}:s:\text{viewpoint key}:\text{sensor})_{1:8})}
 {2^{64}}
 $$
 
@@ -642,14 +642,14 @@ $$
 令 $L_n$ 为从初始视点直接到任一能看见目标的 candidate 的最短三维距离，$P_n$ 为实际累计距离：
 
 $$
-\operatorname{SPL}_n=
+\mathrm{SPL}_n=
 S_n\frac{L_n}{\max(L_n,P_n)}.
 $$
 
 实现的边界情况为
 
 $$
-\operatorname{SPL}_n=
+\mathrm{SPL}_n=
 \begin{cases}
 0, & S_n=0,\\
 1, & S_n=1,\ L_n\le0,\ P_n\le10^{-9},\\
@@ -709,11 +709,11 @@ $$
 Success rate、declared-found rate 和 false-positive rate 都是 Bernoulli indicator 的 sample mean：
 
 $$
-\widehat{\operatorname{SR}}=\frac{1}{m}\sum_nS_n,
+\widehat{\mathrm{SR}}=\frac{1}{m}\sum_nS_n,
 \qquad
-\widehat{\operatorname{DR}}=\frac{1}{m}\sum_n\widehat S_n,
+\widehat{\mathrm{DR}}=\frac{1}{m}\sum_n\widehat S_n,
 \qquad
-\widehat{\operatorname{FPR}}=\frac{1}{m}\sum_nF_n.
+\widehat{\mathrm{FPR}}=\frac{1}{m}\sum_nF_n.
 $$
 
 `successful_elapsed_time_s` 和 `successful_distance_m` 只在 $S_n=1$ 的 subset 上计算，
@@ -779,14 +779,14 @@ independent CI 是否重叠。
 $y_n$ 和预测 prior $b_0^{(n)}$，建议至少报告 negative log-likelihood：
 
 $$
-\operatorname{NLL}
+\mathrm{NLL}
 =-\frac{1}{M}\sum_{n=1}^{M}\ln b_0^{(n)}(y_n),
 $$
 
 multi-class Brier score：
 
 $$
-\operatorname{Brier}
+\mathrm{Brier}
 =\frac{1}{M}\sum_{n=1}^{M}\sum_{i=1}^{N}
 \left(b_0^{(n)}(i)-\mathbb 1[y_n=i]\right)^2,
 $$
@@ -801,7 +801,7 @@ held-out maps 和不同 target categories 上得到验证后，才能声称 LLM 
 $$
 U_{\mathrm{full}},\quad
 U-\lambda_{\mathrm{det}}q_v,\quad
-U-\lambda_{\mathrm{IG}}\operatorname{IG}(v),\quad
+U-\lambda_{\mathrm{IG}}\mathrm{IG}(v),\quad
 U-\lambda_{\mathrm{nov}}N_t(v),\quad
 U+\lambda_{\mathrm{travel}}C_d(v),
 $$
