@@ -95,6 +95,18 @@ Run the platform-neutral tests from the repository root:
 python -m unittest discover -s modules/search_intelligence/tests -p "test_*.py"
 ```
 
+Collect the parameterized search-policy stress dataset:
+
+```bash
+python run/run_search_stress_benchmark.py \
+  --repetitions 20 \
+  --seed 20260730 \
+  --output-dir results/search_stress_benchmark
+```
+
+The default matrix covers 24 map/target/prior scenarios and five sensor/resource
+profiles, producing 9,600 paired policy episodes.
+
 Build and test the ROS package in the ROS 2 environment:
 
 ```bash

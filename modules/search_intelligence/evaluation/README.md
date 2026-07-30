@@ -46,3 +46,22 @@ python run/run_search_policy_benchmark.py \
 The command writes a complete JSON report, a per-episode CSV, and an aggregate CSV.
 The bundled scenarios validate the benchmark pipeline; they are not a publication
 dataset and their scores must not be presented as final research results.
+
+## Parameterized stress benchmark
+
+The stress suite expands the smoke test to 24 matched scenarios: three map
+layouts, near/far target placements, and correct/diffuse/uniform/misleading
+priors. Five paired profiles vary sensor recall, false alarms, observation
+quality, and the viewpoint budget.
+
+```bash
+python run/run_search_stress_benchmark.py \
+  --repetitions 20 \
+  --seed 20260730 \
+  --output-dir results/search_stress_benchmark
+```
+
+This runs 9,600 episodes with the default four policies. It writes a combined
+episode CSV, grouped summary CSV, JSON manifest, and a complete trace report for
+each profile. Profile comparisons reuse the same scenario/repetition seeds so
+sensor samples remain paired.

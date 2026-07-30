@@ -46,8 +46,14 @@ from .evaluation import (
     SearchBenchmarkScenario,
     SearchEpisodeResult,
     SearchEpisodeRunner,
+    SearchStressProfile,
+    SearchStressRun,
     default_benchmark_scenarios,
+    default_stress_profiles,
+    run_stress_benchmark,
+    stress_benchmark_scenarios,
     write_benchmark_report,
+    write_stress_benchmark_results,
 )
 from .integration import SearchObservationAdapter, SearchSensorFrame
 
@@ -72,6 +78,8 @@ __all__ = [
     "SearchBenchmarkScenario",
     "SearchEpisodeResult",
     "SearchEpisodeRunner",
+    "SearchStressProfile",
+    "SearchStressRun",
     "SearchOutcome",
     "SearchOutcomeStatus",
     "SearchState",
@@ -95,6 +103,10 @@ __all__ = [
     "ViewpointScore",
     "viewpoint_distance_matrix",
     "default_benchmark_scenarios",
+    "default_stress_profiles",
     "normalize_semantic_label",
+    "run_stress_benchmark",
+    "stress_benchmark_scenarios",
     "write_benchmark_report",
+    "write_stress_benchmark_results",
 ]

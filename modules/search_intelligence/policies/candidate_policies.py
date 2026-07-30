@@ -93,6 +93,7 @@ class ActiveSearchPolicy(SearchPolicy):
 
     candidates: Tuple[ViewpointCandidate, ...]
     sensor_model: BinarySensorModel = field(default_factory=BinarySensorModel)
+    observation_quality: float = 1.0
     detection_weight: float = 1.0
     information_gain_weight: float = 1.0
     novelty_weight: float = 0.25
@@ -110,6 +111,8 @@ class ActiveSearchPolicy(SearchPolicy):
         )
         if any(not math.isfinite(weight) or weight < 0 for weight in weights):
             raise ValueError("active-search utility weights must be finite and non-negative")
+        if not 0.0 <= self.observation_quality <= 1.0:
+            raise ValueError("observation_quality must be within [0, 1]")
         if self.distance_scale_m <= 0:
             raise ValueError("distance_scale_m must be positive")
         if self.minimum_utility is not None and not math.isfinite(self.minimum_utility):
@@ -176,14 +179,19 @@ class ActiveSearchPolicy(SearchPolicy):
             for cell_id, probability in state.belief.items()
             if cell_id in visible_ids
         )
+        effective_detection_probability = (
+            self.sensor_model.effective_detection_probability(
+                self.observation_quality
+            )
+        )
         detection_probability = (
-            visible_mass * self.sensor_model.detection_probability
+            visible_mass * effective_detection_probability
             + (1.0 - visible_mass)
             * self.sensor_model.false_positive_probability
         )
         information_gain = _binary_expected_information_gain(
             visible_mass,
-            self.sensor_model.detection_probability,
+            effective_detection_probability,
             self.sensor_model.false_positive_probability,
         )
         distance = _travel_distance(state.current_viewpoint, candidate.viewpoint)

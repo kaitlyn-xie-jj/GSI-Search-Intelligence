@@ -115,6 +115,24 @@ class SearchBenchmarkRunnerTests(unittest.TestCase):
         self.assertFalse(result.target_found)
         self.assertEqual(result.spl, 0.0)
 
+    def test_zero_observation_quality_uses_effective_sensor_probability(self):
+        config = SearchBenchmarkConfig(
+            policy_names=("coverage",),
+            repetitions=1,
+            base_seed=0,
+            footprint_radius_m=1000.0,
+            observation_quality=0.0,
+            sensor_model=BinarySensorModel(1.0, 0.0),
+        )
+
+        result = SearchEpisodeRunner(config).run(
+            self.scenario,
+            "coverage",
+        )
+
+        self.assertFalse(result.declared_found)
+        self.assertFalse(result.target_found)
+
     def test_report_writer_creates_json_and_csv_artifacts(self):
         report = SearchBenchmarkRunner(self.config).run((self.scenario,))
 

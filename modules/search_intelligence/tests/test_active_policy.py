@@ -92,6 +92,28 @@ class CandidatePolicyTests(unittest.TestCase):
         self.assertGreater(scores[0].information_gain_nats, 0.0)
         self.assertAlmostEqual(scores[1].information_gain_nats, 0.0)
 
+    def test_zero_quality_sensor_has_no_detection_information(self):
+        policy = ActiveSearchPolicy(
+            self.candidates,
+            sensor_model=BinarySensorModel(0.9, 0.1),
+            observation_quality=0.0,
+            detection_weight=1.0,
+            information_gain_weight=1.0,
+            novelty_weight=0.0,
+            travel_weight=0.0,
+        )
+
+        scores = policy.score_candidates(self._state())
+
+        self.assertTrue(all(
+            abs(score.detection_probability - 0.1) < 1e-12
+            for score in scores
+        ))
+        self.assertTrue(all(
+            abs(score.information_gain_nats) < 1e-12
+            for score in scores
+        ))
+
     def test_travel_cost_breaks_equal_information_tie(self):
         near = ViewpointCandidate(
             "near",

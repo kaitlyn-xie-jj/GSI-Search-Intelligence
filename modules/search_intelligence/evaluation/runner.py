@@ -100,6 +100,12 @@ class SearchEpisodeRunner:
                     "scenario_id": scenario.scenario_id,
                     "repetition": repetition,
                     "footprint_radius_m": self.config.footprint_radius_m,
+                    "observation_quality": self.config.observation_quality,
+                    "effective_detection_probability": (
+                        self.config.sensor_model.effective_detection_probability(
+                            self.config.observation_quality
+                        )
+                    ),
                 },
             ))
             entropy_trace.append(BeliefMap.from_mapping(
@@ -191,6 +197,7 @@ class SearchEpisodeRunner:
             return ActiveSearchPolicy(
                 candidates,
                 sensor_model=self.config.sensor_model,
+                observation_quality=self.config.observation_quality,
                 detection_weight=self.config.detection_weight,
                 information_gain_weight=self.config.information_gain_weight,
                 novelty_weight=self.config.novelty_weight,
@@ -208,7 +215,9 @@ class SearchEpisodeRunner:
     ) -> Tuple[TargetDetection, ...]:
         target_visible = scenario.target_cell_id in set(visible_cell_ids)
         probability = (
-            self.config.sensor_model.detection_probability
+            self.config.sensor_model.effective_detection_probability(
+                self.config.observation_quality
+            )
             if target_visible
             else self.config.sensor_model.false_positive_probability
         )
