@@ -11,6 +11,7 @@ from modules.search_intelligence import (
     SearchSession,
     SearchState,
     SearchTask,
+    TargetDetection,
     Viewpoint,
     ViewpointCandidate,
 )
@@ -209,6 +210,97 @@ class CandidatePolicyTests(unittest.TestCase):
             "candidate-0",
         )
         self.assertEqual(len(session.policy_decisions), 2)
+
+    def _verification_case(self, *, min_confirmations=2, localized=True):
+        task = SearchTask.from_skill_params({
+            "task_id": "active-policy-verification",
+            "area_token": "Area-A",
+            "area": {
+                "kind": "rectangle",
+                "coords": [[0, 0], [60, 0], [60, 20], [0, 20]],
+            },
+            "target_token": "yellow-van",
+            "max_viewpoints": 3,
+            "min_confirmations": min_confirmations,
+        })
+        detected_cell = self.cell_ids[0]
+        exploratory = ViewpointCandidate(
+            "exploratory",
+            Viewpoint(20.0, 10.0, 30.0, 0.0),
+            self.cell_ids[1],
+            (self.cell_ids[1],),
+        )
+        near_verification = ViewpointCandidate(
+            "near-verification",
+            Viewpoint(10.0, 10.0, 30.0, 0.0),
+            detected_cell,
+            (detected_cell,),
+        )
+        far_verification = ViewpointCandidate(
+            "far-verification",
+            Viewpoint(50.0, 10.0, 30.0, 0.0),
+            detected_cell,
+            (detected_cell,),
+        )
+        policy = ActiveSearchPolicy(
+            (exploratory, far_verification, near_verification),
+            detection_weight=1.0,
+            information_gain_weight=0.0,
+            novelty_weight=0.0,
+            travel_weight=0.0,
+        )
+        attributes = {}
+        if localized:
+            attributes["localized_cell_id"] = detected_cell
+        state = SearchState.initial(
+            task,
+            {
+                detected_cell: 0.01,
+                self.cell_ids[1]: 0.98,
+                self.cell_ids[2]: 0.01,
+            },
+            current_viewpoint=Viewpoint(0.0, 10.0, 30.0, 0.0),
+        ).advance(SearchObservation(
+            viewpoint=Viewpoint(0.0, 10.0, 30.0, 0.0),
+            timestamp_s=1.0,
+            detections=(TargetDetection(
+                label="yellow-van",
+                confidence=0.9,
+                entity_id="candidate-target",
+                attributes=attributes,
+            ),),
+            visible_cell_ids=(detected_cell,),
+        ))
+        return policy, state, exploratory, near_verification
+
+    def test_pending_detection_prefers_nearest_verification_viewpoint(self):
+        policy, state, exploratory, near_verification = self._verification_case()
+
+        self.assertEqual(policy.score_candidates(state)[0].viewpoint, exploratory.viewpoint)
+        self.assertEqual(policy.select_next(state), near_verification.viewpoint)
+        metadata = policy.decision_metadata(state, near_verification.viewpoint)
+        self.assertTrue(metadata["verification_mode"])
+        self.assertEqual(metadata["verification_cell_id"], self.cell_ids[0])
+
+    def test_single_confirmation_task_keeps_normal_active_ranking(self):
+        policy, state, exploratory, _ = self._verification_case(
+            min_confirmations=1,
+        )
+
+        self.assertEqual(policy.select_next(state), exploratory.viewpoint)
+        self.assertFalse(
+            policy.decision_metadata(state, exploratory.viewpoint)["verification_mode"]
+        )
+
+    def test_missing_detection_localization_keeps_normal_active_ranking(self):
+        policy, state, exploratory, _ = self._verification_case(localized=False)
+
+        self.assertEqual(policy.select_next(state), exploratory.viewpoint)
+        self.assertIsNone(
+            policy.decision_metadata(state, exploratory.viewpoint)[
+                "verification_cell_id"
+            ]
+        )
 
 
 if __name__ == "__main__":

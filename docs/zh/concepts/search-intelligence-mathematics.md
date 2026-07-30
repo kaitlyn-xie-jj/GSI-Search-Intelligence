@@ -482,6 +482,41 @@ $$
 utility 相同时使用 `candidate_id` 作 deterministic tie-break。若配置
 $U_{\min}$，则只保留 $U(v)\ge U_{\min}$ 的候选；当前 benchmark 未配置该阈值。
 
+#### Confirmation-aware verification
+
+当任务要求多次确认或最小持续时间时，一次满足置信度阈值的检测不能立即声明成功。
+对同一实体 $e$ 的有效检测集合记为 $\mathcal D_e^t$，它仍待复核的条件为
+
+$$
+|\mathcal D_e^t|<n_{\min}
+\quad\lor\quad
+\max_{d\in\mathcal D_e^t}t_d-
+\min_{d\in\mathcal D_e^t}t_d<t_{\mathrm{persist}}.
+$$
+
+若最近一次待复核检测定位到单元 $c_e^*$，可用于复核的未访问候选集合为
+
+$$
+\mathcal V_{\mathrm{verify}}(e)=
+\left\{
+v\in\mathcal V\setminus\mathcal V_{\mathrm{visited}}
+:c_e^*\in V(v)
+\right\}.
+$$
+
+只要该集合非空，policy 进入 verification mode 并选择最近的复核视点：
+
+$$
+v_{t+1}=
+\arg\min_{v\in\mathcal V_{\mathrm{verify}}(e)}d(v_t,v).
+$$
+
+距离相同时使用 `candidate_id` 作 deterministic tie-break。若任务只要求一次确认，
+没有可用的 `localized_cell_id`，或复核集合为空，则回退到上述
+$U_{\mathrm{active}}$ 排序。这个机制只读取任务契约和 observation history；
+benchmark 的 synthetic sensor 与真实仿真 sensor adapter 都应通过 detection attributes
+提供观测得到的 `localized_cell_id`，policy 不读取 ground truth target cell。
+
 ## 9. 资源累计、成功与终止条件
 
 每一步的运动距离、时间和能量为

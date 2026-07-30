@@ -135,8 +135,33 @@ class ActiveSearchPolicy(SearchPolicy):
             scores = tuple(
                 score for score in scores if score.utility >= self.minimum_utility
             )
+        verification_cell_id = self._pending_verification_cell_id(state)
+        if verification_cell_id is not None:
+            verification_candidates = sorted(
+                (
+                    candidate
+                    for candidate in _remaining_candidates(self.candidates, state)
+                    if verification_cell_id in candidate.visible_cell_ids
+                ),
+                key=lambda candidate: (
+                    _travel_distance(state.current_viewpoint, candidate.viewpoint),
+                    candidate.candidate_id,
+                ),
+            )
+            verification_keys = {
+                candidate.viewpoint.key for candidate in verification_candidates
+            }
+            viewpoints = tuple(
+                candidate.viewpoint for candidate in verification_candidates
+            ) + tuple(
+                score.viewpoint
+                for score in scores
+                if score.viewpoint.key not in verification_keys
+            )
+        else:
+            viewpoints = tuple(score.viewpoint for score in scores)
         return _cap_viewpoint_budget(
-            tuple(score.viewpoint for score in scores),
+            viewpoints,
             state,
         )
 
@@ -146,6 +171,16 @@ class ActiveSearchPolicy(SearchPolicy):
         viewpoint: Viewpoint,
     ) -> Mapping[str, Any]:
         metadata = dict(super().decision_metadata(state, viewpoint))
+        verification_cell_id = self._pending_verification_cell_id(state)
+        verification_mode = verification_cell_id is not None and any(
+            candidate.viewpoint.key == viewpoint.key
+            and verification_cell_id in candidate.visible_cell_ids
+            for candidate in _remaining_candidates(self.candidates, state)
+        )
+        metadata.update({
+            "verification_mode": verification_mode,
+            "verification_cell_id": verification_cell_id,
+        })
         score = next(
             (
                 candidate_score
@@ -161,6 +196,41 @@ class ActiveSearchPolicy(SearchPolicy):
             "selected_viewpoint_score": score.to_dict(),
         })
         return metadata
+
+    def _pending_verification_cell_id(
+        self,
+        state: SearchState,
+    ) -> Optional[str]:
+        criteria = state.task.success_criteria
+        if criteria.min_confirmations <= 1 and criteria.min_persistence_s <= 0.0:
+            return None
+
+        grouped: Dict[str, list[Tuple[float, int, Optional[str]]]] = {}
+        order = 0
+        for observation in state.observations:
+            for detection in observation.matching_detections(criteria.min_confidence):
+                key = detection.entity_id or detection.label.strip().lower()
+                localized_cell_id = detection.attributes.get("localized_cell_id")
+                grouped.setdefault(key, []).append((
+                    observation.timestamp_s,
+                    order,
+                    str(localized_cell_id) if localized_cell_id is not None else None,
+                ))
+                order += 1
+
+        pending = []
+        for detections in grouped.values():
+            timestamps = [item[0] for item in detections]
+            confirmed = (
+                len(detections) >= criteria.min_confirmations
+                and max(timestamps) - min(timestamps) >= criteria.min_persistence_s
+            )
+            localized = [item for item in detections if item[2] is not None]
+            if not confirmed and localized:
+                pending.append(max(localized, key=lambda item: item[1]))
+        if not pending:
+            return None
+        return max(pending, key=lambda item: item[1])[2]
 
     def _score(
         self,

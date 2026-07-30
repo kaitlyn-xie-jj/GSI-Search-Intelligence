@@ -236,8 +236,15 @@ class SearchEpisodeRunner:
                 confidence=self.config.detection_confidence,
                 estimated_position=(target[0], target[1], 0.0),
                 entity_id=scenario.target_entity_id,
-                attributes={"ground_truth_match": True},
+                attributes={
+                    "ground_truth_match": True,
+                    "localized_cell_id": scenario.target_cell_id,
+                },
             ),)
+        localized_cell = scenario.grid.nearest_searchable_cell(
+            viewpoint.x,
+            viewpoint.y,
+        )
         return (TargetDetection(
             label=scenario.task.target.query,
             confidence=self.config.detection_confidence,
@@ -245,7 +252,12 @@ class SearchEpisodeRunner:
             entity_id=(
                 f"false-positive:{scenario.scenario_id}:{viewpoint.key}"
             ),
-            attributes={"ground_truth_match": False},
+            attributes={
+                "ground_truth_match": False,
+                "localized_cell_id": (
+                    localized_cell.cell_id if localized_cell is not None else None
+                ),
+            },
         ),)
 
     def _shortest_detection_distance(
