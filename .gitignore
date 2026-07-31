@@ -348,3 +348,7 @@ __pycache__/
 
 .codex/
 .agents/
+
+# SearchWorld simulator assets are source inputs, not learned model outputs.
+!ros2_ws/simulation/search_world_v1_1/models/
+!ros2_ws/simulation/search_world_v1_1/models/**

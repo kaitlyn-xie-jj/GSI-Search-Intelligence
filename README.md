@@ -43,6 +43,10 @@ remain responsible for vehicle control and execution.
 - MAVROS Offboard controller with staged takeoff and bounded horizontal
   setpoint progression.
 - Parameterized GSI SearchWorld V1 for Gazebo/PX4 experiments.
+- SearchWorld V1.1 with a stable X500, one RGB-D sensor, and a reproducible
+  25-minute resource stability gate.
+- SearchWorld V2 with campus, industrial, and suburban map families, a nadir
+  RGB-D X500, area-normalized semantic priors, and repeated batch execution.
 
 ## Repository Layout
 
@@ -124,14 +128,21 @@ that follows the intended LLM output contract; live LLM prior generation and
 cross-scenario calibration remain future evaluation work.
 
 The bundled color detector is a simulator interface baseline, not the final
-open-world perception method. The current VisionFlow airframe also includes a
-manipulator and should be replaced by a landing-stable search UAV model for
-repeatable touchdown experiments.
+open-world perception method. SearchWorld V1.1 now uses a standard X500 with a
+single RGB-D sensor and selects the official PX4 multicopter controllers for
+its dedicated airframe while preserving VisionFlow's controllers for existing
+airframes.
 
 More details are available in
 [`ros2_ws/src/gsi_search_bridge/README.md`](ros2_ws/src/gsi_search_bridge/README.md)
 and
 [`ros2_ws/simulation/search_world_v1/README.md`](ros2_ws/simulation/search_world_v1/README.md).
+The V1.1 airframe and 25-minute resource/flight gate are documented in
+[`ros2_ws/simulation/search_world_v1_1/README.md`](ros2_ws/simulation/search_world_v1_1/README.md).
+The V2 map suite and multi-map runner are documented in
+[`ros2_ws/simulation/search_world_v2/README.md`](ros2_ws/simulation/search_world_v2/README.md).
+The first final-configuration three-map result is recorded in
+[`docs/zh/validation/searchworld-v2-2026-07-31.md`](docs/zh/validation/searchworld-v2-2026-07-31.md).
 The 2026-07-30 clean-restart, PX4 preflight recovery, and live sensor-frame
 evidence is recorded in
 [`docs/zh/validation/gazebo-searchworld-v1-2026-07-30.md`](docs/zh/validation/gazebo-searchworld-v1-2026-07-30.md).

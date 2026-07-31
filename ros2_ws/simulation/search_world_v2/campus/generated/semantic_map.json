@@ -1,0 +1,277 @@
+{
+  "coordinate_frame": "ENU",
+  "metadata": {
+    "generator": "gsi_search_bridge.search_world_generator",
+    "ground_truth_excluded": true,
+    "layout_archetype": "campus",
+    "seed": 101
+  },
+  "nodes": [
+    {
+      "id": "parking-southwest",
+      "properties": {
+        "category": "area",
+        "description": "SearchWorld parking region",
+        "label": "parking-southwest",
+        "passability": "open",
+        "type": "parking",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          -8.0,
+          -8.0
+        ],
+        "min_corner": [
+          -46.0,
+          -36.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "sports-northwest",
+      "properties": {
+        "category": "area",
+        "description": "SearchWorld sports field region",
+        "label": "sports-northwest",
+        "passability": "open",
+        "type": "sports_field",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          -10.0,
+          36.0
+        ],
+        "min_corner": [
+          -46.0,
+          8.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "academic-core",
+      "properties": {
+        "category": "area",
+        "description": "SearchWorld campus region",
+        "label": "academic-core",
+        "passability": "open",
+        "type": "campus",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          46.0,
+          36.0
+        ],
+        "min_corner": [
+          8.0,
+          8.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "road-east-west",
+      "properties": {
+        "category": "trans_facility",
+        "description": "SearchWorld road region",
+        "label": "road-east-west",
+        "passability": "open",
+        "type": "road",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          50.0,
+          5.0
+        ],
+        "min_corner": [
+          -50.0,
+          -5.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "road-campus-spur",
+      "properties": {
+        "category": "trans_facility",
+        "description": "SearchWorld road region",
+        "label": "road-campus-spur",
+        "passability": "open",
+        "type": "road",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          5.0,
+          40.0
+        ],
+        "min_corner": [
+          -5.0,
+          -40.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "entrance-south",
+      "properties": {
+        "category": "area",
+        "description": "SearchWorld building entrance region",
+        "label": "entrance-south",
+        "passability": "open",
+        "type": "building_entrance",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          8.0,
+          -8.0
+        ],
+        "min_corner": [
+          -5.0,
+          -36.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "restricted-utilities",
+      "properties": {
+        "category": "area",
+        "description": "SearchWorld restricted zone region",
+        "label": "restricted-utilities",
+        "passability": "restricted",
+        "type": "restricted_zone",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          46.0,
+          36.0
+        ],
+        "min_corner": [
+          34.0,
+          24.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "library",
+      "properties": {
+        "category": "building",
+        "description": "Physical building footprint",
+        "label": "library",
+        "passability": "restricted",
+        "type": "academic_building",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          27.0,
+          23.5
+        ],
+        "min_corner": [
+          9.0,
+          12.5
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "engineering",
+      "properties": {
+        "category": "building",
+        "description": "Physical building footprint",
+        "label": "engineering",
+        "passability": "restricted",
+        "type": "academic_building",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          43.0,
+          15.0
+        ],
+        "min_corner": [
+          27.0,
+          6.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "student-center",
+      "properties": {
+        "category": "building",
+        "description": "Physical building footprint",
+        "label": "student-center",
+        "passability": "restricted",
+        "type": "public_building",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          20.5,
+          35.0
+        ],
+        "min_corner": [
+          7.5,
+          27.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "laboratory",
+      "properties": {
+        "category": "building",
+        "description": "Physical building footprint",
+        "label": "laboratory",
+        "passability": "restricted",
+        "type": "laboratory",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          41.5,
+          33.0
+        ],
+        "min_corner": [
+          26.5,
+          23.0
+        ],
+        "type": "rectangle"
+      }
+    }
+  ],
+  "schema_version": "1.0",
+  "search_area": {
+    "coords": [
+      [
+        -50.0,
+        -40.0
+      ],
+      [
+        50.0,
+        -40.0
+      ],
+      [
+        50.0,
+        40.0
+      ],
+      [
+        -50.0,
+        40.0
+      ]
+    ],
+    "kind": "rectangle"
+  },
+  "units": "meters",
+  "world_name": "gsi_search_world_v2_campus"
+}

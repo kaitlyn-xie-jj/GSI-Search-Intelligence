@@ -1,0 +1,27 @@
+diff --git a/src/modules/simulation/gz_bridge/GZBridge.cpp b/src/modules/simulation/gz_bridge/GZBridge.cpp
+--- a/src/modules/simulation/gz_bridge/GZBridge.cpp
++++ b/src/modules/simulation/gz_bridge/GZBridge.cpp
+@@ -458,6 +458,13 @@ void GZBridge::imuCallback(const gz::msgs::IMU &msg)
+ {
+ 	const uint64_t timestamp = hrt_absolute_time();
+ 
++	// Gazebo transport can retry a callback in the same lockstep tick after an
++	// interrupted publish. Do not forward duplicate sample times to vehicle_imu.
++	if (timestamp <= _last_imu_timestamp) {
++		return;
++	}
++	_last_imu_timestamp = timestamp;
++
+ 	// FLU -> FRD
+ 	static const auto q_FLU_to_FRD = gz::math::Quaterniond(0, 1, 0, 0);
+ 
+diff --git a/src/modules/simulation/gz_bridge/GZBridge.hpp b/src/modules/simulation/gz_bridge/GZBridge.hpp
+--- a/src/modules/simulation/gz_bridge/GZBridge.hpp
++++ b/src/modules/simulation/gz_bridge/GZBridge.hpp
+@@ -173,6 +173,7 @@ private:
+ 	matrix::Vector3f _euler_prev{};
+ 	hrt_abstime _timestamp_prev{};
++	hrt_abstime _last_imu_timestamp{};
+ 
+ 	const std::string _world_name;
+ 	const std::string _model_name;

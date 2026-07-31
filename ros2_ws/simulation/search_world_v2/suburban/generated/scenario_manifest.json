@@ -1,0 +1,73 @@
+{
+  "artifacts": {
+    "gz_bridge": {
+      "filename": "gz_bridge.yaml",
+      "sha256": "8369d68425e920e98b0da1e80fa89dc6e926c4d085daf8872c145a9de2e29138"
+    },
+    "search_params": {
+      "filename": "search_params.yaml",
+      "sha256": "f61861b28840bff73984e831f3d0e15043e513688c62fccf19b3ec076c627cc9"
+    },
+    "search_prior": {
+      "filename": "search_prior.json",
+      "sha256": "2f89b600601806b3d8e8919f4a31ff5e0702f9a58b19056b798fa1e6cbf35608"
+    },
+    "semantic_map": {
+      "filename": "semantic_map.json",
+      "sha256": "a5e57655c02df371274c8ae1f3fcb00a6894879f8273b79fe83393d691566b7d"
+    },
+    "visionflow_profile": {
+      "filename": "visionflow_profile.conf",
+      "sha256": "9bacdb9f71f62dafa7767fece4f1c3f5a3bd833e0e844d5ecddf78f65930bff2"
+    },
+    "world": {
+      "filename": "gsi_search_world_v2_suburban.sdf",
+      "sha256": "40ef0e8e393a31b6a69db8ed5a849f0c0e0f710bff87cb04eeaedbc2f46497cb"
+    }
+  },
+  "complexity": {
+    "barrier_count": 3,
+    "building_count": 6,
+    "container_count": 2,
+    "layout_archetype": "suburban",
+    "parked_vehicle_count": 10,
+    "semantic_region_count": 8,
+    "tree_count": 18,
+    "utility_pole_count": 8
+  },
+  "coordinate_frame": "ENU",
+  "ground_truth_policy": "evaluator-only; never load into search policy",
+  "private_artifacts": {
+    "ground_truth": {
+      "filename": "ground_truth.json",
+      "sha256": "15405605d01ccbedac03e6559de2e86e225c40151825b672a5dfb410653d17f9"
+    }
+  },
+  "scenario_id": "gsi_search_world_v2_suburban",
+  "schema_version": "1.0",
+  "search_area": {
+    "coords": [
+      [
+        -50.0,
+        -40.0
+      ],
+      [
+        50.0,
+        -40.0
+      ],
+      [
+        50.0,
+        40.0
+      ],
+      [
+        -50.0,
+        40.0
+      ]
+    ],
+    "kind": "rectangle"
+  },
+  "seed": 303,
+  "target_query": "yellow-van",
+  "target_slot_count": 4,
+  "units": "meters"
+}

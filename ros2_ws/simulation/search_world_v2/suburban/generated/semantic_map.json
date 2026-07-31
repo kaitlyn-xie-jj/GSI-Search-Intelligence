@@ -1,0 +1,343 @@
+{
+  "coordinate_frame": "ENU",
+  "metadata": {
+    "generator": "gsi_search_bridge.search_world_generator",
+    "ground_truth_excluded": true,
+    "layout_archetype": "suburban",
+    "seed": 303
+  },
+  "nodes": [
+    {
+      "id": "roadside-parking",
+      "properties": {
+        "category": "area",
+        "description": "SearchWorld parking region",
+        "label": "roadside-parking",
+        "passability": "open",
+        "type": "parking",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          46.0,
+          -8.0
+        ],
+        "min_corner": [
+          -46.0,
+          -36.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "community-park",
+      "properties": {
+        "category": "area",
+        "description": "SearchWorld park region",
+        "label": "community-park",
+        "passability": "open",
+        "type": "park",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          -12.0,
+          36.0
+        ],
+        "min_corner": [
+          -46.0,
+          8.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "residential-east",
+      "properties": {
+        "category": "area",
+        "description": "SearchWorld residential region",
+        "label": "residential-east",
+        "passability": "open",
+        "type": "residential",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          46.0,
+          36.0
+        ],
+        "min_corner": [
+          8.0,
+          8.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "local-shops",
+      "properties": {
+        "category": "area",
+        "description": "SearchWorld commercial region",
+        "label": "local-shops",
+        "passability": "open",
+        "type": "commercial",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          8.0,
+          36.0
+        ],
+        "min_corner": [
+          -8.0,
+          8.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "main-street",
+      "properties": {
+        "category": "trans_facility",
+        "description": "SearchWorld road region",
+        "label": "main-street",
+        "passability": "open",
+        "type": "road",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          50.0,
+          5.0
+        ],
+        "min_corner": [
+          -50.0,
+          -5.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "side-street",
+      "properties": {
+        "category": "trans_facility",
+        "description": "SearchWorld road region",
+        "label": "side-street",
+        "passability": "open",
+        "type": "road",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          28.0,
+          40.0
+        ],
+        "min_corner": [
+          18.0,
+          -40.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "school-entrance",
+      "properties": {
+        "category": "area",
+        "description": "SearchWorld building entrance region",
+        "label": "school-entrance",
+        "passability": "open",
+        "type": "building_entrance",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          8.0,
+          18.0
+        ],
+        "min_corner": [
+          -8.0,
+          8.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "restricted-substation",
+      "properties": {
+        "category": "area",
+        "description": "SearchWorld restricted zone region",
+        "label": "restricted-substation",
+        "passability": "restricted",
+        "type": "restricted_zone",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          46.0,
+          36.0
+        ],
+        "min_corner": [
+          35.0,
+          25.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "school",
+      "properties": {
+        "category": "building",
+        "description": "Physical building footprint",
+        "label": "school",
+        "passability": "restricted",
+        "type": "school_building",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          8.0,
+          33.5
+        ],
+        "min_corner": [
+          -10.0,
+          22.5
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "shop-row",
+      "properties": {
+        "category": "building",
+        "description": "Physical building footprint",
+        "label": "shop-row",
+        "passability": "restricted",
+        "type": "commercial_building",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          17.0,
+          16.5
+        ],
+        "min_corner": [
+          3.0,
+          9.5
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "house-a",
+      "properties": {
+        "category": "building",
+        "description": "Physical building footprint",
+        "label": "house-a",
+        "passability": "restricted",
+        "type": "residential_building",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          40.0,
+          16.0
+        ],
+        "min_corner": [
+          30.0,
+          8.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "house-b",
+      "properties": {
+        "category": "building",
+        "description": "Physical building footprint",
+        "label": "house-b",
+        "passability": "restricted",
+        "type": "residential_building",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          41.5,
+          31.0
+        ],
+        "min_corner": [
+          30.5,
+          23.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "house-c",
+      "properties": {
+        "category": "building",
+        "description": "Physical building footprint",
+        "label": "house-c",
+        "passability": "restricted",
+        "type": "residential_building",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          18.5,
+          32.5
+        ],
+        "min_corner": [
+          9.5,
+          25.5
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "clinic",
+      "properties": {
+        "category": "building",
+        "description": "Physical building footprint",
+        "label": "clinic",
+        "passability": "restricted",
+        "type": "public_building",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          -10.0,
+          17.0
+        ],
+        "min_corner": [
+          -22.0,
+          9.0
+        ],
+        "type": "rectangle"
+      }
+    }
+  ],
+  "schema_version": "1.0",
+  "search_area": {
+    "coords": [
+      [
+        -50.0,
+        -40.0
+      ],
+      [
+        50.0,
+        -40.0
+      ],
+      [
+        50.0,
+        40.0
+      ],
+      [
+        -50.0,
+        40.0
+      ]
+    ],
+    "kind": "rectangle"
+  },
+  "units": "meters",
+  "world_name": "gsi_search_world_v2_suburban"
+}

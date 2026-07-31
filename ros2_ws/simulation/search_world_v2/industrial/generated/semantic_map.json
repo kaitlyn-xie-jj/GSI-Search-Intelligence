@@ -1,0 +1,299 @@
+{
+  "coordinate_frame": "ENU",
+  "metadata": {
+    "generator": "gsi_search_bridge.search_world_generator",
+    "ground_truth_excluded": true,
+    "layout_archetype": "industrial",
+    "seed": 202
+  },
+  "nodes": [
+    {
+      "id": "employee-parking",
+      "properties": {
+        "category": "area",
+        "description": "SearchWorld parking region",
+        "label": "employee-parking",
+        "passability": "open",
+        "type": "parking",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          -12.0,
+          -8.0
+        ],
+        "min_corner": [
+          -46.0,
+          -36.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "loading-apron",
+      "properties": {
+        "category": "area",
+        "description": "SearchWorld loading zone region",
+        "label": "loading-apron",
+        "passability": "open",
+        "type": "loading_zone",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          46.0,
+          -8.0
+        ],
+        "min_corner": [
+          8.0,
+          -36.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "warehouse-yard",
+      "properties": {
+        "category": "area",
+        "description": "SearchWorld industrial yard region",
+        "label": "warehouse-yard",
+        "passability": "open",
+        "type": "industrial_yard",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          2.0,
+          36.0
+        ],
+        "min_corner": [
+          -46.0,
+          8.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "container-storage",
+      "properties": {
+        "category": "area",
+        "description": "SearchWorld storage yard region",
+        "label": "container-storage",
+        "passability": "open",
+        "type": "storage_yard",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          46.0,
+          36.0
+        ],
+        "min_corner": [
+          8.0,
+          8.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "haul-road",
+      "properties": {
+        "category": "trans_facility",
+        "description": "SearchWorld road region",
+        "label": "haul-road",
+        "passability": "open",
+        "type": "road",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          50.0,
+          5.0
+        ],
+        "min_corner": [
+          -50.0,
+          -5.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "security-gate",
+      "properties": {
+        "category": "area",
+        "description": "SearchWorld building entrance region",
+        "label": "security-gate",
+        "passability": "open",
+        "type": "building_entrance",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          7.0,
+          -8.0
+        ],
+        "min_corner": [
+          -7.0,
+          -36.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "restricted-tank-farm",
+      "properties": {
+        "category": "area",
+        "description": "SearchWorld restricted zone region",
+        "label": "restricted-tank-farm",
+        "passability": "restricted",
+        "type": "restricted_zone",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          -30.0,
+          36.0
+        ],
+        "min_corner": [
+          -46.0,
+          22.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "warehouse-a",
+      "properties": {
+        "category": "building",
+        "description": "Physical building footprint",
+        "label": "warehouse-a",
+        "passability": "restricted",
+        "type": "warehouse",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          -17.0,
+          23.5
+        ],
+        "min_corner": [
+          -39.0,
+          10.5
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "warehouse-b",
+      "properties": {
+        "category": "building",
+        "description": "Physical building footprint",
+        "label": "warehouse-b",
+        "passability": "restricted",
+        "type": "warehouse",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          5.0,
+          34.0
+        ],
+        "min_corner": [
+          -15.0,
+          22.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "dispatch-office",
+      "properties": {
+        "category": "building",
+        "description": "Physical building footprint",
+        "label": "dispatch-office",
+        "passability": "restricted",
+        "type": "office_building",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          26.5,
+          16.0
+        ],
+        "min_corner": [
+          13.5,
+          8.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "maintenance-shop",
+      "properties": {
+        "category": "building",
+        "description": "Physical building footprint",
+        "label": "maintenance-shop",
+        "passability": "restricted",
+        "type": "service_building",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          45.0,
+          33.0
+        ],
+        "min_corner": [
+          29.0,
+          23.0
+        ],
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "security-office",
+      "properties": {
+        "category": "building",
+        "description": "Physical building footprint",
+        "label": "security-office",
+        "passability": "restricted",
+        "type": "security_building",
+        "visibility": "public"
+      },
+      "shape": {
+        "max_corner": [
+          6.5,
+          -14.5
+        ],
+        "min_corner": [
+          -0.5,
+          -19.5
+        ],
+        "type": "rectangle"
+      }
+    }
+  ],
+  "schema_version": "1.0",
+  "search_area": {
+    "coords": [
+      [
+        -50.0,
+        -40.0
+      ],
+      [
+        50.0,
+        -40.0
+      ],
+      [
+        50.0,
+        40.0
+      ],
+      [
+        -50.0,
+        40.0
+      ]
+    ],
+    "kind": "rectangle"
+  },
+  "units": "meters",
+  "world_name": "gsi_search_world_v2_industrial"
+}

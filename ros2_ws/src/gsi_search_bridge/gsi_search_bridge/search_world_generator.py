@@ -24,7 +24,15 @@ ZONE_COLORS: Mapping[str, Color] = {
     "road": (0.13, 0.14, 0.15, 1.0),
     "building_entrance": (0.50, 0.48, 0.38, 1.0),
     "restricted_zone": (0.45, 0.16, 0.15, 1.0),
+    "industrial_yard": (0.38, 0.40, 0.41, 1.0),
+    "storage_yard": (0.31, 0.34, 0.36, 1.0),
+    "sports_field": (0.18, 0.40, 0.20, 1.0),
+    "residential": (0.43, 0.45, 0.40, 1.0),
+    "commercial": (0.46, 0.43, 0.38, 1.0),
+    "sidewalk": (0.48, 0.48, 0.46, 1.0),
 }
+
+V2_ARCHETYPES = {"campus", "industrial", "suburban"}
 
 
 def load_config(path: Path | str) -> Dict[str, Any]:
@@ -66,6 +74,26 @@ def validate_config(config: Mapping[str, Any]) -> None:
         if not str(visionflow.get(name, "")).strip():
             raise ValueError(f"visionflow.{name} must not be empty")
 
+    sensor = config.get("sensor", {})
+    if sensor:
+        required_sensor_fields = (
+            "gz_topic_root",
+            "rgb_image_suffix",
+            "camera_info_suffix",
+            "depth_image_suffix",
+            "point_cloud_suffix",
+            "frame_id",
+        )
+        for name in required_sensor_fields:
+            if not str(sensor.get(name, "")).strip():
+                raise ValueError(f"sensor.{name} must not be empty")
+        if float(sensor.get("maximum_range_m", 0.0)) <= 0.0:
+            raise ValueError("sensor.maximum_range_m must be positive")
+        extrinsics = sensor.get("extrinsics") or {}
+        for name in ("x_m", "y_m", "z_m", "roll_rad", "pitch_rad", "yaw_rad"):
+            if name not in extrinsics:
+                raise ValueError(f"sensor.extrinsics.{name} is required")
+
     search = config["search"]
     resolution = float(search.get("grid_resolution_m", 0.0))
     altitude = float(search.get("flight_altitude_m", 0.0))
@@ -75,11 +103,26 @@ def validate_config(config: Mapping[str, Any]) -> None:
         raise ValueError("search.flight_altitude_m must clear the V1 obstacles")
     if int(search.get("max_viewpoints", 0)) <= 0:
         raise ValueError("search.max_viewpoints must be positive")
+    execution = config.get("execution", {})
+    if int(execution.get("prestream_setpoint_count", 40)) <= 0:
+        raise ValueError("execution.prestream_setpoint_count must be positive")
 
     complexity = config["complexity"]
     for name in ("tree_count", "parked_vehicle_count", "container_count"):
         if int(complexity.get(name, -1)) < 0:
             raise ValueError(f"complexity.{name} must not be negative")
+    for name in ("building_count", "barrier_count", "utility_pole_count"):
+        if name in complexity and int(complexity[name]) < 0:
+            raise ValueError(f"complexity.{name} must not be negative")
+
+    scene = config.get("scene")
+    if scene:
+        archetype = str(scene.get("archetype", "")).strip()
+        if archetype not in V2_ARCHETYPES:
+            choices = ", ".join(sorted(V2_ARCHETYPES))
+            raise ValueError(f"scene.archetype must be one of: {choices}")
+        if width < 90.0 or height < 70.0:
+            raise ValueError("SearchWorld V2 scenes must be at least 90 m by 70 m")
 
     target = config["target"]
     if not str(target.get("query", "")).strip():
@@ -132,7 +175,7 @@ def generate_artifacts(
         _search_params_yaml(config), encoding="utf-8", newline="\n"
     )
     artifacts["gz_bridge"].write_text(
-        _gz_bridge_yaml(str(config["world"]["name"])),
+        _gz_bridge_yaml(config),
         encoding="utf-8",
         newline="\n",
     )
@@ -146,6 +189,12 @@ def generate_artifacts(
 
 
 def _build_layout(config: Mapping[str, Any]) -> Dict[str, Any]:
+    if config.get("scene"):
+        return _build_v2_layout(config)
+    return _build_legacy_layout(config)
+
+
+def _build_legacy_layout(config: Mapping[str, Any]) -> Dict[str, Any]:
     world = config["world"]
     complexity = config["complexity"]
     width = float(world["size_m"]["x"])
@@ -244,7 +293,264 @@ def _build_layout(config: Mapping[str, Any]) -> Dict[str, Any]:
         "containers": containers,
         "target_slots": target_slots,
         "selected_target_slot": target_slots[slot_index],
+        "barriers": [],
+        "utility_poles": [],
+        "layout_archetype": "legacy_quadrants",
     }
+
+
+def _build_v2_layout(config: Mapping[str, Any]) -> Dict[str, Any]:
+    """Build one deterministic member of the V2 realistic scene family."""
+    world = config["world"]
+    complexity = config["complexity"]
+    width = float(world["size_m"]["x"])
+    height = float(world["size_m"]["y"])
+    hx, hy = width / 2.0, height / 2.0
+    archetype = str(config["scene"]["archetype"])
+    blueprint = _v2_blueprint(archetype, hx, hy)
+    rng = random.Random(int(world.get("seed", 0)))
+
+    building_count = int(complexity.get("building_count", len(blueprint["buildings"])))
+    if building_count > len(blueprint["buildings"]):
+        raise ValueError(
+            f"complexity.building_count for {archetype} must be at most "
+            f"{len(blueprint['buildings'])}"
+        )
+    buildings = list(blueprint["buildings"][:building_count])
+
+    tree_zone = _zone_by_id(blueprint["zones"], blueprint["tree_zone"])["bounds"]
+    trees = [
+        {
+            "id": f"tree-{index + 1:02d}",
+            "center": _sample_point(rng, tree_zone, 2.0),
+            "height": rng.uniform(4.5, 7.5),
+        }
+        for index in range(int(complexity.get("tree_count", 0)))
+    ]
+
+    vehicle_zone = _zone_by_id(
+        blueprint["zones"], blueprint["vehicle_zone"]
+    )["bounds"]
+    vehicle_colors = (
+        (0.16, 0.24, 0.46, 1.0),
+        (0.70, 0.72, 0.73, 1.0),
+        (0.42, 0.15, 0.13, 1.0),
+        (0.12, 0.14, 0.16, 1.0),
+        (0.55, 0.55, 0.50, 1.0),
+    )
+    parked_vehicles = []
+    vehicle_count = int(complexity.get("parked_vehicle_count", 0))
+    for index, center in enumerate(_parking_points(vehicle_zone, vehicle_count)):
+        parked_vehicles.append({
+            "id": f"parked-vehicle-{index + 1:02d}",
+            "center": center,
+            "yaw": math.pi / 2.0 if archetype != "suburban" else 0.0,
+            "color": vehicle_colors[index % len(vehicle_colors)],
+        })
+
+    container_zone = _zone_by_id(
+        blueprint["zones"], blueprint["container_zone"]
+    )["bounds"]
+    containers = []
+    container_count = int(complexity.get("container_count", 0))
+    for index, center in enumerate(_yard_points(container_zone, container_count)):
+        containers.append({
+            "id": f"container-{index + 1:02d}",
+            "center": center,
+            "color": (0.17, 0.32 + 0.07 * (index % 3), 0.40, 1.0),
+        })
+
+    barriers = list(
+        blueprint["barriers"][: int(complexity.get("barrier_count", len(blueprint["barriers"])))]
+    )
+    pole_count = int(complexity.get("utility_pole_count", 0))
+    utility_poles = _utility_poles(blueprint["pole_axis"], pole_count)
+
+    target_slots = list(blueprint["target_slots"])
+    configured_slot = int(config["target"].get("slot_index", -1))
+    slot_index = rng.randrange(len(target_slots)) if configured_slot == -1 else configured_slot
+    if slot_index >= len(target_slots):
+        raise ValueError(f"target.slot_index must be smaller than {len(target_slots)}")
+
+    return {
+        "bounds": (-hx, -hy, hx, hy),
+        "zones": list(blueprint["zones"]),
+        "buildings": buildings,
+        "trees": trees,
+        "parked_vehicles": parked_vehicles,
+        "containers": containers,
+        "barriers": barriers,
+        "utility_poles": utility_poles,
+        "target_slots": target_slots,
+        "selected_target_slot": target_slots[slot_index],
+        "layout_archetype": archetype,
+    }
+
+
+def _v2_blueprint(archetype: str, hx: float, hy: float) -> Dict[str, Any]:
+    margin = 4.0
+    road = 5.0
+    if archetype == "campus":
+        zones = [
+            _zone("parking-southwest", "parking", (-hx + margin, -hy + margin, -8.0, -road - 3.0)),
+            _zone("sports-northwest", "sports_field", (-hx + margin, road + 3.0, -10.0, hy - margin)),
+            _zone("academic-core", "campus", (8.0, road + 3.0, hx - margin, hy - margin)),
+            _zone("road-east-west", "road", (-hx, -road, hx, road), category="trans_facility"),
+            _zone("road-campus-spur", "road", (-5.0, -hy, 5.0, hy), category="trans_facility"),
+            _zone("entrance-south", "building_entrance", (-5.0, -hy + margin, 8.0, -road - 3.0)),
+            _zone("restricted-utilities", "restricted_zone", (hx - 16.0, hy - 16.0, hx - margin, hy - margin), passability="restricted"),
+        ]
+        buildings = [
+            _building("library", "academic_building", (18.0, 18.0), (18.0, 11.0, 9.0), (0.58, 0.57, 0.53, 1.0)),
+            _building("engineering", "academic_building", (35.0, 10.5), (16.0, 9.0, 12.0), (0.46, 0.50, 0.52, 1.0)),
+            _building("student-center", "public_building", (14.0, 31.0), (13.0, 8.0, 6.5), (0.64, 0.60, 0.52, 1.0)),
+            _building("laboratory", "laboratory", (34.0, 28.0), (15.0, 10.0, 8.0), (0.50, 0.53, 0.55, 1.0)),
+        ]
+        target_slots = [
+            _target_slot("campus-parking-1", "parking-southwest", -28.0, -23.0, 0.0),
+            _target_slot("campus-entrance-1", "entrance-south", 2.0, -21.0, math.pi / 2.0),
+            _target_slot("campus-road-1", "road-east-west", -18.0, 0.0, 0.0),
+            _target_slot("campus-core-1", "academic-core", 10.0, 11.0, math.pi / 2.0),
+        ]
+        barriers = [
+            _barrier("campus-gate-west", (-7.5, -12.0), (0.3, 8.0, 1.2)),
+            _barrier("campus-service-wall", (42.0, 23.0), (0.3, 12.0, 2.2)),
+            _barrier("campus-bike-rack", (9.0, 8.5), (7.0, 0.25, 1.0)),
+        ]
+        return _blueprint(zones, buildings, target_slots, barriers, "sports-northwest", "parking-southwest", "restricted-utilities", (-hx + 5.0, -road - 2.0, hx - 5.0, -road - 2.0))
+
+    if archetype == "industrial":
+        zones = [
+            _zone("employee-parking", "parking", (-hx + margin, -hy + margin, -12.0, -road - 3.0)),
+            _zone("loading-apron", "loading_zone", (8.0, -hy + margin, hx - margin, -road - 3.0)),
+            _zone("warehouse-yard", "industrial_yard", (-hx + margin, road + 3.0, 2.0, hy - margin)),
+            _zone("container-storage", "storage_yard", (8.0, road + 3.0, hx - margin, hy - margin)),
+            _zone("haul-road", "road", (-hx, -road, hx, road), category="trans_facility"),
+            _zone("security-gate", "building_entrance", (-7.0, -hy + margin, 7.0, -road - 3.0)),
+            _zone("restricted-tank-farm", "restricted_zone", (-hx + margin, hy - 18.0, -hx + 20.0, hy - margin), passability="restricted"),
+        ]
+        buildings = [
+            _building("warehouse-a", "warehouse", (-28.0, 17.0), (22.0, 13.0, 9.0), (0.48, 0.50, 0.51, 1.0)),
+            _building("warehouse-b", "warehouse", (-5.0, 28.0), (20.0, 12.0, 8.0), (0.54, 0.52, 0.48, 1.0)),
+            _building("dispatch-office", "office_building", (20.0, 12.0), (13.0, 8.0, 6.0), (0.58, 0.56, 0.50, 1.0)),
+            _building("maintenance-shop", "service_building", (37.0, 28.0), (16.0, 10.0, 7.0), (0.45, 0.48, 0.49, 1.0)),
+            _building("security-office", "security_building", (3.0, -17.0), (7.0, 5.0, 3.5), (0.62, 0.60, 0.54, 1.0)),
+        ]
+        target_slots = [
+            _target_slot("industrial-parking-1", "employee-parking", -30.0, -23.0, 0.0),
+            _target_slot("industrial-loading-1", "loading-apron", 25.0, -22.0, math.pi),
+            _target_slot("industrial-gate-1", "security-gate", 0.0, -15.0, math.pi / 2.0),
+            _target_slot("industrial-road-1", "haul-road", -14.0, 0.0, 0.0),
+        ]
+        barriers = [
+            _barrier("loading-divider", (8.0, -18.0), (0.3, 18.0, 1.5)),
+            _barrier("yard-wall-west", (-42.0, 17.0), (0.3, 20.0, 2.5)),
+            _barrier("tank-farm-wall", (-35.0, 33.0), (18.0, 0.3, 2.5)),
+            _barrier("gate-arm", (0.0, -9.0), (9.0, 0.25, 1.0)),
+        ]
+        return _blueprint(zones, buildings, target_slots, barriers, "warehouse-yard", "employee-parking", "container-storage", (-hx + 5.0, road + 2.0, hx - 5.0, road + 2.0))
+
+    zones = [
+        _zone("roadside-parking", "parking", (-hx + margin, -hy + margin, hx - margin, -road - 3.0)),
+        _zone("community-park", "park", (-hx + margin, road + 3.0, -12.0, hy - margin)),
+        _zone("residential-east", "residential", (8.0, road + 3.0, hx - margin, hy - margin)),
+        _zone("local-shops", "commercial", (-8.0, road + 3.0, 8.0, hy - margin)),
+        _zone("main-street", "road", (-hx, -road, hx, road), category="trans_facility"),
+        _zone("side-street", "road", (18.0, -hy, 28.0, hy), category="trans_facility"),
+        _zone("school-entrance", "building_entrance", (-8.0, road + 3.0, 8.0, 18.0)),
+        _zone("restricted-substation", "restricted_zone", (hx - 15.0, hy - 15.0, hx - margin, hy - margin), passability="restricted"),
+    ]
+    buildings = [
+        _building("school", "school_building", (-1.0, 28.0), (18.0, 11.0, 7.0), (0.62, 0.58, 0.50, 1.0)),
+        _building("shop-row", "commercial_building", (10.0, 13.0), (14.0, 7.0, 4.5), (0.56, 0.52, 0.45, 1.0)),
+        _building("house-a", "residential_building", (35.0, 12.0), (10.0, 8.0, 5.0), (0.66, 0.61, 0.55, 1.0)),
+        _building("house-b", "residential_building", (36.0, 27.0), (11.0, 8.0, 5.5), (0.58, 0.62, 0.60, 1.0)),
+        _building("house-c", "residential_building", (14.0, 29.0), (9.0, 7.0, 4.8), (0.64, 0.56, 0.50, 1.0)),
+        _building("clinic", "public_building", (-16.0, 13.0), (12.0, 8.0, 5.0), (0.70, 0.70, 0.66, 1.0)),
+    ]
+    target_slots = [
+        _target_slot("suburban-parking-1", "roadside-parking", -30.0, -20.0, 0.0),
+        _target_slot("suburban-shops-1", "local-shops", 0.0, 11.0, math.pi / 2.0),
+        _target_slot("suburban-school-1", "school-entrance", -2.0, 13.0, math.pi / 2.0),
+        _target_slot("suburban-road-1", "main-street", 35.0, 0.0, math.pi),
+    ]
+    barriers = [
+        _barrier("school-fence", (-10.0, 22.0), (0.3, 20.0, 1.6)),
+        _barrier("park-fence", (-14.0, 8.0), (20.0, 0.3, 1.3)),
+        _barrier("substation-wall", (42.0, 28.0), (0.3, 14.0, 2.2)),
+    ]
+    return _blueprint(zones, buildings, target_slots, barriers, "community-park", "roadside-parking", "restricted-substation", (-hx + 5.0, road + 2.0, hx - 5.0, road + 2.0))
+
+
+def _blueprint(zones, buildings, target_slots, barriers, tree_zone, vehicle_zone, container_zone, pole_axis):
+    return {
+        "zones": zones,
+        "buildings": buildings,
+        "target_slots": target_slots,
+        "barriers": barriers,
+        "tree_zone": tree_zone,
+        "vehicle_zone": vehicle_zone,
+        "container_zone": container_zone,
+        "pole_axis": pole_axis,
+    }
+
+
+def _building(name, kind, center, size, color):
+    return {"id": name, "type": kind, "center": center, "size": size, "color": color}
+
+
+def _barrier(name, center, size):
+    return {"id": name, "center": center, "size": size, "color": (0.48, 0.47, 0.43, 1.0)}
+
+
+def _target_slot(name, region_id, x, y, yaw):
+    return {"id": name, "region_id": region_id, "pose": _pose(x, y, 0.5, yaw)}
+
+
+def _parking_points(bounds: Bounds, count: int) -> list[Tuple[float, float]]:
+    if count <= 0:
+        return []
+    x_min, y_min, x_max, y_max = bounds
+    columns = max(1, math.ceil(count / 2.0))
+    dx = (x_max - x_min - 6.0) / max(columns, 1)
+    return [
+        (
+            min(x_max - 2.0, x_min + 3.0 + (index // 2 + 0.5) * dx),
+            min(y_max - 2.0, y_min + 4.0 + (index % 2) * 5.0),
+        )
+        for index in range(count)
+    ]
+
+
+def _yard_points(bounds: Bounds, count: int) -> list[Tuple[float, float]]:
+    if count <= 0:
+        return []
+    x_min, y_min, x_max, y_max = bounds
+    columns = max(1, math.ceil(count / 2.0))
+    return [
+        (
+            min(x_max - 3.0, x_min + 4.0 + (index % columns) * 6.5),
+            min(y_max - 2.0, y_min + 4.0 + (index // columns) * 6.0),
+        )
+        for index in range(count)
+    ]
+
+
+def _utility_poles(axis: Sequence[float], count: int) -> list[Dict[str, Any]]:
+    if count <= 0:
+        return []
+    x1, y1, x2, y2 = (float(value) for value in axis)
+    return [
+        {
+            "id": f"utility-pole-{index + 1:02d}",
+            "center": (
+                x1 + (index + 1) * (x2 - x1) / (count + 1),
+                y1 + (index + 1) * (y2 - y1) / (count + 1),
+            ),
+            "height": 6.0,
+        }
+        for index in range(count)
+    ]
 
 
 def _zone(
@@ -304,7 +610,12 @@ def _build_sdf(config: Mapping[str, Any], layout: Mapping[str, Any]) -> ET.Eleme
 
     for zone in layout["zones"]:
         _add_zone_visual(world, zone)
-    _add_road_markings(world, layout["bounds"])
+    if layout["layout_archetype"] == "legacy_quadrants":
+        _add_road_markings(world, layout["bounds"])
+    else:
+        for zone in layout["zones"]:
+            if zone["type"] == "road":
+                _add_road_zone_markings(world, zone)
 
     for building in layout["buildings"]:
         _add_box_model(
@@ -326,7 +637,20 @@ def _build_sdf(config: Mapping[str, Any], layout: Mapping[str, Any]) -> ET.Eleme
             (5.5, 2.4, 2.6),
             container["color"],
         )
-    _add_restricted_fence(world, _zone_by_id(layout["zones"], "restricted-northeast")["bounds"])
+    for barrier in layout["barriers"]:
+        _add_box_model(
+            world,
+            barrier["id"],
+            (*barrier["center"], barrier["size"][2] / 2.0),
+            barrier["size"],
+            barrier["color"],
+        )
+    for pole in layout["utility_poles"]:
+        _add_utility_pole(world, pole)
+    restricted = [zone for zone in layout["zones"] if zone["type"] == "restricted_zone"]
+    for zone in restricted:
+        prefix = "restricted" if zone["id"] == "restricted-northeast" else zone["id"]
+        _add_restricted_fence(world, zone["bounds"], prefix=prefix)
 
     target = config["target"]
     slot = layout["selected_target_slot"]
@@ -411,6 +735,29 @@ def _add_road_markings(world: ET.Element, bounds: Bounds) -> None:
         x += 6.0
 
 
+def _add_road_zone_markings(world: ET.Element, zone: Mapping[str, Any]) -> None:
+    x_min, y_min, x_max, y_max = zone["bounds"]
+    horizontal = (x_max - x_min) >= (y_max - y_min)
+    length_min, length_max = (x_min, x_max) if horizontal else (y_min, y_max)
+    fixed = (y_min + y_max) / 2.0 if horizontal else (x_min + x_max) / 2.0
+    position = length_min + 3.0
+    index = 0
+    while position < length_max - 3.0:
+        index += 1
+        center = (position, fixed, 0.04) if horizontal else (fixed, position, 0.04)
+        size = (3.0, 0.18, 0.025) if horizontal else (0.18, 3.0, 0.025)
+        _add_box_model(
+            world,
+            f"{zone['id']}-marking-{index:02d}",
+            center,
+            size,
+            (0.92, 0.90, 0.68, 1.0),
+            collidable=False,
+            cast_shadows=False,
+        )
+        position += 6.0
+
+
 def _add_box_model(
     world: ET.Element,
     name: str,
@@ -482,7 +829,27 @@ def _add_vehicle(world: ET.Element, vehicle: Mapping[str, Any], *, yellow: bool)
     _add_material(roof, vehicle["color"])
 
 
-def _add_restricted_fence(world: ET.Element, bounds: Bounds) -> None:
+def _add_utility_pole(world: ET.Element, pole: Mapping[str, Any]) -> None:
+    x, y = pole["center"]
+    height = float(pole["height"])
+    _add_box_model(
+        world,
+        str(pole["id"]),
+        (x, y, height / 2.0),
+        (0.18, 0.18, height),
+        (0.24, 0.25, 0.24, 1.0),
+    )
+    _add_box_model(
+        world,
+        f"{pole['id']}-lamp",
+        (x + 0.38, y, height - 0.15),
+        (0.8, 0.28, 0.22),
+        (0.66, 0.65, 0.57, 1.0),
+        collidable=False,
+    )
+
+
+def _add_restricted_fence(world: ET.Element, bounds: Bounds, *, prefix: str = "restricted") -> None:
     x_min, y_min, x_max, y_max = bounds
     color = (0.62, 0.12, 0.10, 1.0)
     for name, center, size in (
@@ -491,7 +858,7 @@ def _add_restricted_fence(world: ET.Element, bounds: Bounds) -> None:
         ("west", (x_min, (y_min + y_max) / 2.0, 1.2), (0.22, y_max - y_min, 2.4)),
         ("east", (x_max, (y_min + y_max) / 2.0, 1.2), (0.22, y_max - y_min, 2.4)),
     ):
-        _add_box_model(world, f"restricted-fence-{name}", center, size, color)
+        _add_box_model(world, f"{prefix}-fence-{name}", center, size, color)
 
 
 def _add_material(visual: ET.Element, color: Color) -> None:
@@ -512,7 +879,7 @@ def _semantic_map(config: Mapping[str, Any], layout: Mapping[str, Any]) -> Dict[
                 "type": zone["type"],
                 "label": zone["id"],
                 "passability": zone["passability"],
-                "description": f"SearchWorld V1 {zone['type'].replace('_', ' ')} region",
+                "description": f"SearchWorld {zone['type'].replace('_', ' ')} region",
                 "visibility": "public",
             },
             "shape": _rectangle_shape(zone["bounds"]),
@@ -541,6 +908,7 @@ def _semantic_map(config: Mapping[str, Any], layout: Mapping[str, Any]) -> Dict[
         "nodes": nodes,
         "metadata": {
             "seed": int(config["world"].get("seed", 0)),
+            "layout_archetype": layout["layout_archetype"],
             "ground_truth_excluded": True,
             "generator": "gsi_search_bridge.search_world_generator",
         },
@@ -554,8 +922,9 @@ def _search_prior(config: Mapping[str, Any]) -> Dict[str, Any]:
         "confidence": float(prior["confidence"]),
         "default_weight": float(prior.get("default_weight", 0.05)),
         "excluded_labels": list(prior.get("excluded_labels", ())),
+        "projection_mode": str(prior.get("projection_mode", "cell_affinity")),
         "metadata": {
-            "source": "searchworld_v1_task_conditioned_prior",
+            "source": "searchworld_task_conditioned_prior_fixture",
             "target_query": config["target"]["query"],
         },
     }
@@ -605,11 +974,14 @@ def _manifest(
         "target_slot_count": len(layout["target_slots"]),
         "ground_truth_policy": "evaluator-only; never load into search policy",
         "complexity": {
+            "layout_archetype": layout["layout_archetype"],
             "semantic_region_count": len(layout["zones"]),
             "building_count": len(layout["buildings"]),
             "tree_count": len(layout["trees"]),
             "parked_vehicle_count": len(layout["parked_vehicles"]),
             "container_count": len(layout["containers"]),
+            "barrier_count": len(layout["barriers"]),
+            "utility_pole_count": len(layout["utility_poles"]),
         },
         "artifacts": {
             key: {
@@ -633,8 +1005,26 @@ def _search_params_yaml(config: Mapping[str, Any]) -> str:
     target = config["target"]
     hx = float(world["size_m"]["x"]) / 2.0
     hy = float(world["size_m"]["y"]) / 2.0
-    semantic_path = "simulation/search_world_v1/generated/semantic_map.json"
-    prior_path = "simulation/search_world_v1/generated/search_prior.json"
+    scenario_name = str(world["name"])
+    scenario_directory = str(config.get("artifact_directory", "search_world_v1"))
+    semantic_path = f"simulation/{scenario_directory}/generated/semantic_map.json"
+    prior_path = f"simulation/{scenario_directory}/generated/search_prior.json"
+    sensor = config.get("sensor") or {
+        "frame_id": "camera_link",
+        "maximum_range_m": 19.1,
+        "extrinsics": {
+            "x_m": 0.121998,
+            "y_m": -0.002,
+            "z_m": 0.064561,
+            "roll_rad": 0.0,
+            "pitch_rad": 0.785398,
+            "yaw_rad": 0.0,
+        },
+    }
+    extrinsics = sensor["extrinsics"]
+    prestream_setpoint_count = int(
+        config.get("execution", {}).get("prestream_setpoint_count", 40)
+    )
     return f"""gsi_search_node:
   ros__parameters:
     use_sim_time: true
@@ -664,18 +1054,18 @@ def _search_params_yaml(config: Mapping[str, Any]) -> str:
     require_detections: true
     require_point_cloud: true
     detections_in_map_frame: true
-    camera_translation_x_m: 0.121998
-    camera_translation_y_m: -0.002
-    camera_translation_z_m: 0.064561
-    camera_roll_rad: 0.0
-    camera_pitch_rad: 0.785398
-    camera_yaw_rad: 0.0
+    camera_translation_x_m: {_yaml_float(extrinsics['x_m'])}
+    camera_translation_y_m: {_yaml_float(extrinsics['y_m'])}
+    camera_translation_z_m: {_yaml_float(extrinsics['z_m'])}
+    camera_roll_rad: {_yaml_float(extrinsics['roll_rad'])}
+    camera_pitch_rad: {_yaml_float(extrinsics['pitch_rad'])}
+    camera_yaw_rad: {_yaml_float(extrinsics['yaw_rad'])}
     ground_plane_z_m: {_yaml_float(world.get('ground_z_m', 0.0))}
     ground_tolerance_m: 0.35
     visibility_point_resolution_m: 0.5
     pointcloud_sample_limit: 10000
-    pointcloud_maximum_range_m: 19.1
-    pointcloud_frame_id: camera_link
+    pointcloud_maximum_range_m: {_yaml_float(sensor['maximum_range_m'])}
+    pointcloud_frame_id: {sensor['frame_id']}
     odom_topic: /mavros/local_position/odom
     imu_topic: /mavros/imu/data
     rgb_topic: /oakd1/rgb/image
@@ -686,7 +1076,7 @@ def _search_params_yaml(config: Mapping[str, Any]) -> str:
     battery_topic: /mavros/battery
     goal_pose_topic: /gsi/uav/goal_pose
     outcome_topic: /gsi/search/outcome
-    trace_output_path: /tmp/GSI/results/gazebo_sensor_validation/search_world_v1_trace.jsonl
+    trace_output_path: /tmp/GSI/results/gazebo_sensor_validation/{scenario_name}_trace.jsonl
 
 gsi_mavros_offboard_controller:
   ros__parameters:
@@ -699,7 +1089,7 @@ gsi_mavros_offboard_controller:
     set_mode_service: /mavros/set_mode
     map_frame: map
     setpoint_rate_hz: 20.0
-    prestream_setpoint_count: 40
+    prestream_setpoint_count: {prestream_setpoint_count}
     request_interval_s: 2.0
     auto_offboard: true
     auto_arm: true
@@ -728,28 +1118,41 @@ gsi_color_target_detector:
     minimum_pixels: 250
     depth_window_radius_px: 6
     minimum_depth_m: 0.2
-    maximum_depth_m: 19.1
-    camera_translation_x_m: 0.121998
-    camera_translation_y_m: -0.002
-    camera_translation_z_m: 0.064561
-    camera_roll_rad: 0.0
-    camera_pitch_rad: 0.785398
-    camera_yaw_rad: 0.0
+    maximum_depth_m: {_yaml_float(sensor['maximum_range_m'])}
+    camera_translation_x_m: {_yaml_float(extrinsics['x_m'])}
+    camera_translation_y_m: {_yaml_float(extrinsics['y_m'])}
+    camera_translation_z_m: {_yaml_float(extrinsics['z_m'])}
+    camera_roll_rad: {_yaml_float(extrinsics['roll_rad'])}
+    camera_pitch_rad: {_yaml_float(extrinsics['pitch_rad'])}
+    camera_yaw_rad: {_yaml_float(extrinsics['yaw_rad'])}
 """
 
 
-def _gz_bridge_yaml(world_name: str) -> str:
-    prefix = (
-        f"/world/{world_name}/model/q940_ti_gripper4_0/model/"
-        "oakd_lite_one/link/camera_link/sensor"
-    )
+def _gz_bridge_yaml(config: Mapping[str, Any]) -> str:
+    world_name = str(config["world"]["name"])
+    sensor = config.get("sensor")
+    if sensor:
+        prefix = str(sensor["gz_topic_root"]).rstrip("/")
+        rgb_suffix = str(sensor["rgb_image_suffix"])
+        camera_info_suffix = str(sensor["camera_info_suffix"])
+        depth_suffix = str(sensor["depth_image_suffix"])
+        points_suffix = str(sensor["point_cloud_suffix"])
+    else:
+        prefix = (
+            f"/world/{world_name}/model/q940_ti_gripper4_0/model/"
+            "oakd_lite_one/link/camera_link/sensor"
+        )
+        rgb_suffix = "/IMX214/image"
+        camera_info_suffix = "/IMX214/camera_info"
+        depth_suffix = "/StereoOV7251/depth_image"
+        points_suffix = "/StereoOV7251/depth_image/points"
     pairs = (
         ("/clock", "/clock", "rosgraph_msgs/msg/Clock", "gz.msgs.Clock"),
-        ("/oakd1/rgb/image", f"{prefix}/IMX214/image", "sensor_msgs/msg/Image", "gz.msgs.Image"),
-        ("/oakd1/rgb/camera_info", f"{prefix}/IMX214/camera_info", "sensor_msgs/msg/CameraInfo", "gz.msgs.CameraInfo"),
-        ("/oakd1/depth/image", f"{prefix}/StereoOV7251/depth_image", "sensor_msgs/msg/Image", "gz.msgs.Image"),
-        ("/oakd1/depth/camera_info", f"{prefix}/StereoOV7251/camera_info", "sensor_msgs/msg/CameraInfo", "gz.msgs.CameraInfo"),
-        ("/oakd1/depth/points", f"{prefix}/StereoOV7251/depth_image/points", "sensor_msgs/msg/PointCloud2", "gz.msgs.PointCloudPacked"),
+        ("/oakd1/rgb/image", f"{prefix}{rgb_suffix}", "sensor_msgs/msg/Image", "gz.msgs.Image"),
+        ("/oakd1/rgb/camera_info", f"{prefix}{camera_info_suffix}", "sensor_msgs/msg/CameraInfo", "gz.msgs.CameraInfo"),
+        ("/oakd1/depth/image", f"{prefix}{depth_suffix}", "sensor_msgs/msg/Image", "gz.msgs.Image"),
+        ("/oakd1/depth/camera_info", f"{prefix}{camera_info_suffix}", "sensor_msgs/msg/CameraInfo", "gz.msgs.CameraInfo"),
+        ("/oakd1/depth/points", f"{prefix}{points_suffix}", "sensor_msgs/msg/PointCloud2", "gz.msgs.PointCloudPacked"),
     )
     sections = []
     for ros_topic, gz_topic, ros_type, gz_type in pairs:
@@ -770,14 +1173,14 @@ def _visionflow_profile(config: Mapping[str, Any]) -> str:
     world_name = str(config["world"]["name"])
     return f"""
 
-# BEGIN GSI SearchWorld V1 profile (managed).
+# BEGIN {visionflow['profile_id']} profile (managed).
 add_sitl_profile \\
     --id \"{visionflow['profile_id']}\" \\
     --name \"{visionflow['profile_name']}\" \\
     --world \"{world_name}\" \\
     --target \"{visionflow['px4_target']}\" \\
     --pose \"{visionflow['spawn_pose']}\"
-# END GSI SearchWorld V1 profile (managed).
+# END {visionflow['profile_id']} profile (managed).
 """
 
 

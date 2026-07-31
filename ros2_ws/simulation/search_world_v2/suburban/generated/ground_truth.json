@@ -1,0 +1,21 @@
+{
+  "evaluator_only": true,
+  "schema_version": "1.0",
+  "seed": 303,
+  "targets": [
+    {
+      "entity_id": "yellow-search-van",
+      "model_name": "yellow_search_van",
+      "pose_enu_m": {
+        "x": -2.0,
+        "y": 13.0,
+        "yaw_rad": 1.570796,
+        "z": 0.5
+      },
+      "query": "yellow-van",
+      "semantic_region_id": "school-entrance",
+      "slot_id": "suburban-school-1"
+    }
+  ],
+  "world_name": "gsi_search_world_v2_suburban"
+}

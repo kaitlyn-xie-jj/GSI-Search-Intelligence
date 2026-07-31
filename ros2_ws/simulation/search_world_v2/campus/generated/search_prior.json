@@ -1,0 +1,19 @@
+{
+  "confidence": 0.75,
+  "default_weight": 0.03,
+  "excluded_labels": [
+    "restricted_zone"
+  ],
+  "metadata": {
+    "source": "searchworld_task_conditioned_prior_fixture",
+    "target_query": "yellow-van"
+  },
+  "projection_mode": "label_mass",
+  "semantic_weights": {
+    "building_entrance": 0.55,
+    "campus": 0.18,
+    "parking": 1.0,
+    "road": 0.35,
+    "sports_field": 0.05
+  }
+}

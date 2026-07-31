@@ -1,0 +1,12 @@
+#!/bin/sh
+# @name Gazebo x500 with GSI nadir RGB-D
+# @type Quadrotor
+
+PX4_SIM_MODEL=${PX4_SIM_MODEL:=x500_gsi_rgbd_nadir}
+
+. ${R}etc/init.d-posix/airframes/4001_gz_x500
+
+# This benchmark is driven by an onboard MAVROS bridge, not a QGroundControl
+# heartbeat. Keep physical-vehicle power and GCS loss checks out of SITL.
+param set-default CBRK_SUPPLY_CHK 894281
+param set-default NAV_DLL_ACT 0

@@ -1,0 +1,21 @@
+{
+  "evaluator_only": true,
+  "schema_version": "1.0",
+  "seed": 101,
+  "targets": [
+    {
+      "entity_id": "yellow-search-van",
+      "model_name": "yellow_search_van",
+      "pose_enu_m": {
+        "x": -28.0,
+        "y": -23.0,
+        "yaw_rad": 0.0,
+        "z": 0.5
+      },
+      "query": "yellow-van",
+      "semantic_region_id": "parking-southwest",
+      "slot_id": "campus-parking-1"
+    }
+  ],
+  "world_name": "gsi_search_world_v2_campus"
+}

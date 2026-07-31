@@ -27,6 +27,8 @@ setup(
             "mavros_offboard_controller = gsi_search_bridge.mavros_offboard_controller:main",
             "color_target_detector = gsi_search_bridge.color_target_detector:main",
             "generate_search_world = gsi_search_bridge.search_world_generator:main",
+            "searchworld_stability = gsi_search_bridge.stability:main",
+            "searchworld_v2_results = gsi_search_bridge.v2_results:main",
         ],
     },
 )

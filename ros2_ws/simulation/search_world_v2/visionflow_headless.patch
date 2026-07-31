@@ -1,0 +1,11 @@
+diff --git a/docker/run_gz_sitl.sh b/docker/run_gz_sitl.sh
+--- a/docker/run_gz_sitl.sh
++++ b/docker/run_gz_sitl.sh
+@@ -217,6 +217,7 @@ docker compose -f docker/compose.yaml run \
+     -e PX4_SELECTED_TARGET="${SELECTED_TARGET}" \
+     -e PX4_SELECTED_EXTRA_CMAKE_ARGS="${SELECTED_EXTRA}" \
+     -e PX4_SELECTED_MODEL_POSE="${SELECTED_POSE}" \
++    -e HEADLESS="${HEADLESS:-0}" \
+     px4-humble-gz \
+     bash -lc '
+         set -e

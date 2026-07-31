@@ -1,0 +1,21 @@
+{
+  "evaluator_only": true,
+  "schema_version": "1.0",
+  "seed": 202,
+  "targets": [
+    {
+      "entity_id": "yellow-search-van",
+      "model_name": "yellow_search_van",
+      "pose_enu_m": {
+        "x": 25.0,
+        "y": -22.0,
+        "yaw_rad": 3.141593,
+        "z": 0.5
+      },
+      "query": "yellow-van",
+      "semantic_region_id": "loading-apron",
+      "slot_id": "industrial-loading-1"
+    }
+  ],
+  "world_name": "gsi_search_world_v2_industrial"
+}

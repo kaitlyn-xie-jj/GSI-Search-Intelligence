@@ -75,6 +75,7 @@ class SearchPriorProjection:
     matched_labels: Tuple[str, ...] = ()
     unmatched_labels: Tuple[str, ...] = ()
     confidence: float = 1.0
+    projection_mode: str = "cell_affinity"
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "belief", dict(self.belief))
@@ -95,6 +96,7 @@ class SearchPrior:
     confidence: float = 1.0
     default_weight: float = 0.0
     excluded_labels: Tuple[str, ...] = ()
+    projection_mode: str = "cell_affinity"
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -111,6 +113,10 @@ class SearchPrior:
             raise ValueError("SearchPrior.confidence must be within [0, 1]")
         if self.default_weight < 0:
             raise ValueError("SearchPrior.default_weight must not be negative")
+        if self.projection_mode not in {"cell_affinity", "label_mass"}:
+            raise ValueError(
+                "SearchPrior.projection_mode must be cell_affinity or label_mass"
+            )
         object.__setattr__(self, "semantic_weights", weights)
         object.__setattr__(
             self,
@@ -147,6 +153,7 @@ class SearchPrior:
             confidence=float(output.get("confidence", 1.0)),
             default_weight=float(output.get("default_weight", 0.0)),
             excluded_labels=tuple(raw_exclusions),
+            projection_mode=str(output.get("projection_mode", "cell_affinity")),
             metadata=output.get("metadata") or {},
         )
 
@@ -169,6 +176,11 @@ class SearchPrior:
                     "items": {"type": "string"},
                     "uniqueItems": True,
                 },
+                "projection_mode": {
+                    "type": "string",
+                    "enum": ["cell_affinity", "label_mass"],
+                    "default": "cell_affinity",
+                },
                 "metadata": {"type": "object"},
             },
         }
@@ -183,6 +195,7 @@ class SearchPrior:
                 raw_cell_scores={},
                 unmatched_labels=tuple(self.semantic_weights),
                 confidence=self.confidence,
+                projection_mode=self.projection_mode,
             )
 
         available_labels = {
@@ -195,26 +208,43 @@ class SearchPrior:
         unmatched = tuple(sorted(requested_labels - available_labels))
         excluded = set(self.excluded_labels)
 
-        raw_scores: Dict[str, float] = {}
+        cell_labels: Dict[str, set[str]] = {}
         eligible_cell_ids = []
         for cell in searchable:
             labels = {normalize_semantic_label(label) for label in cell.semantic_labels}
-            if labels & excluded:
-                score = 0.0
-            else:
+            cell_labels[cell.cell_id] = labels
+            if not labels & excluded:
                 eligible_cell_ids.append(cell.cell_id)
-                matching_weights = [
-                    weight
-                    for label, weight in self.semantic_weights.items()
-                    if label in labels
-                ]
-                score = max([float(self.default_weight), *matching_weights])
-            raw_scores[cell.cell_id] = score
 
         # An invalid all-excluded request falls back to the whole searchable grid.
         if not eligible_cell_ids:
             eligible_cell_ids = [cell.cell_id for cell in searchable]
         eligible = set(eligible_cell_ids)
+        label_counts = {
+            label: sum(
+                cell_id in eligible and label in labels
+                for cell_id, labels in cell_labels.items()
+            )
+            for label in self.semantic_weights
+        }
+        raw_scores: Dict[str, float] = {}
+        for cell in searchable:
+            if cell.cell_id not in eligible:
+                raw_scores[cell.cell_id] = 0.0
+                continue
+            matching_weights = []
+            for label, weight in self.semantic_weights.items():
+                if label not in cell_labels[cell.cell_id]:
+                    continue
+                if self.projection_mode == "label_mass":
+                    matching_weights.append(weight / max(1, label_counts[label]))
+                else:
+                    matching_weights.append(weight)
+            default_score = float(self.default_weight)
+            if self.projection_mode == "label_mass":
+                default_score /= len(eligible)
+            raw_scores[cell.cell_id] = max([default_score, *matching_weights])
+
         score_total = sum(
             score for cell_id, score in raw_scores.items() if cell_id in eligible
         )
@@ -244,6 +274,7 @@ class SearchPrior:
             matched_labels=matched,
             unmatched_labels=unmatched,
             confidence=self.confidence,
+            projection_mode=self.projection_mode,
         )
 
     def to_dict(self) -> Dict[str, Any]:

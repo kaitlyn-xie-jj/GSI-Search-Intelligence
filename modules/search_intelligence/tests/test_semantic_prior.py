@@ -187,6 +187,59 @@ class SearchPriorTests(unittest.TestCase):
         self.assertAlmostEqual(sum(projection.belief.values()), 1.0)
         json.dumps(projection.to_dict())
 
+    def test_label_mass_projection_does_not_reward_larger_regions(self):
+        task = SearchTask.from_skill_params({
+            "task_id": "area-normalized-prior",
+            "area_token": "Outdoor-B",
+            "area": {
+                "kind": "rectangle",
+                "coords": [[0, 0], [60, 0], [60, 20], [0, 20]],
+            },
+            "target_token": "yellow-van",
+        })
+        grid = SearchGrid.from_task(task, resolution_m=20.0)
+        annotated = SemanticGridBuilder().annotate(grid, [
+            {
+                "id": "large-parking",
+                "properties": {"category": "area", "type": "parking"},
+                "shape": {
+                    "type": "rectangle",
+                    "min_corner": [0, 0],
+                    "max_corner": [40, 20],
+                },
+            },
+            {
+                "id": "small-entrance",
+                "properties": {"category": "area", "type": "building_entrance"},
+                "shape": {
+                    "type": "rectangle",
+                    "min_corner": [40, 0],
+                    "max_corner": [60, 20],
+                },
+            },
+        ])
+        projection = SearchPrior(
+            task_id=task.task_id,
+            semantic_weights={"parking": 1.0, "building_entrance": 1.0},
+            confidence=1.0,
+            projection_mode="label_mass",
+        ).project(annotated)
+        cells = {cell.cell_id: cell for cell in annotated.cells}
+
+        parking_mass = sum(
+            probability
+            for cell_id, probability in projection.belief.items()
+            if "parking" in cells[cell_id].semantic_labels
+        )
+        entrance_mass = sum(
+            probability
+            for cell_id, probability in projection.belief.items()
+            if "building_entrance" in cells[cell_id].semantic_labels
+        )
+        self.assertAlmostEqual(parking_mass, 0.5)
+        self.assertAlmostEqual(entrance_mass, 0.5)
+        self.assertEqual(projection.projection_mode, "label_mass")
+
     def test_low_confidence_prior_is_mixed_with_uniform_uncertainty(self):
         prior = SearchPrior(
             task_id="prior-task",
