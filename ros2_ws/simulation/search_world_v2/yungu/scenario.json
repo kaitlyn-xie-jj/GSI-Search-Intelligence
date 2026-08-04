@@ -1,0 +1,26 @@
+{
+  "schema_version": "2.0",
+  "world": {
+    "name": "gsi_search_world_v2_yungu",
+    "seed": 2030,
+    "size_m": {"x": 330.0, "y": 222.0},
+    "ground_z_m": 0.0,
+    "geodetic_origin": {
+      "latitude_deg": 30.334034,
+      "longitude_deg": 120.036295,
+      "elevation_m": 0.0
+    }
+  },
+  "scene": {"archetype": "campus", "source": "yungu2030_v1"},
+  "search": {
+    "grid_resolution_m": 10.0,
+    "flight_altitude_m": 65.0,
+    "sensor_footprint_radius_m": 35.0,
+    "max_viewpoints": 100
+  },
+  "target": {
+    "query": "yellow-van",
+    "entity_id": "yellow-search-van",
+    "model_name": "yellow_search_van"
+  }
+}

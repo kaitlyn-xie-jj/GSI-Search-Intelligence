@@ -1,0 +1,18 @@
+{
+  "confidence": 0.75,
+  "default_weight": 0.03,
+  "excluded_labels": ["campus_building"],
+  "metadata": {
+    "source": "yungu_v1_task_conditioned_demo_prior",
+    "target_query": "yellow-van"
+  },
+  "projection_mode": "label_mass",
+  "semantic_weights": {
+    "road": 1.0,
+    "parking": 0.8,
+    "plaza": 0.7,
+    "passage": 0.6,
+    "access_point": 0.5,
+    "building_frontage": 0.3
+  }
+}

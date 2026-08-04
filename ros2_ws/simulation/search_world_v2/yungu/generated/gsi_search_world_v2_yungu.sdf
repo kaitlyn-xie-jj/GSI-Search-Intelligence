@@ -1,0 +1,321 @@
+<?xml version='1.0' encoding='utf-8'?>
+<sdf version="1.9">
+  <world name="gsi_search_world_v2_yungu">
+    <physics type="ode">
+      <max_step_size>0.004</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+      <real_time_update_rate>250</real_time_update_rate>
+    </physics>
+    <gravity>0 0 -9.8</gravity>
+    <scene>
+      <grid>false</grid>
+      <ambient>0.62 0.62 0.60 1</ambient>
+      <background>0.70 0.78 0.84 1</background>
+      <shadows>true</shadows>
+    </scene>
+    <light name="sun" type="directional">
+      <pose>160 100 120 0 0 0</pose>
+      <cast_shadows>true</cast_shadows>
+      <intensity>1.0</intensity>
+      <direction>-0.3 0.2 -0.9</direction>
+      <diffuse>0.95 0.93 0.88 1</diffuse>
+      <specular>0.25 0.25 0.25 1</specular>
+    </light>
+    <spherical_coordinates>
+      <surface_model>EARTH_WGS84</surface_model>
+      <world_frame_orientation>ENU</world_frame_orientation>
+      <latitude_deg>30.334034</latitude_deg>
+      <longitude_deg>120.036295</longitude_deg>
+      <elevation>0</elevation>
+    </spherical_coordinates>
+    <model name="ground_collision">
+      <static>true</static>
+      <link name="link">
+        <collision name="ground_south">
+          <pose>161.742435 21.239667 -0.100000 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>371.617731 105.432425 0.200000</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="ground_north">
+          <pose>161.742435 166.906986 -0.100000 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>371.617731 131.761925 0.200000</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="ground_west">
+          <pose>42.063956 87.490952 -0.100000 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>132.260775 27.070145 0.200000</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="ground_east">
+          <pose>271.185059 87.490952 -0.100000 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>152.732483 27.070145 0.200000</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="ground_sunken_plaza">
+          <pose>151.506580 87.490952 -8.793441 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>86.624474 27.070145 0.200000</size>
+            </box>
+          </geometry>
+        </collision>
+      </link>
+    </model>
+    <model name="yungu_campus_local_origin">
+      <static>true</static>
+      <link name="link">
+        <visual name="campus_visual">
+          <geometry>
+            <mesh>
+              <uri>meshes/yungu_visual_demo_v2.glb</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name="collider_building1">
+          <pose>285.492554 22.779342 27.191673 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>39.118042 48.458040 55.078041</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="collider_building10">
+          <pose>121.517075 153.716110 27.989380 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>31.678009 41.078003 51.797997</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="collider_building11">
+          <pose>65.185503 27.852798 10.655864 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>32.498043 40.818002 42.798044</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="collider_building12">
+          <pose>64.954819 158.733078 12.295125 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>38.098038 30.417999 42.798040</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="collider_building13">
+          <pose>17.495590 23.622642 27.068710 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>33.998047 45.538042 55.078041</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="collider_building14">
+          <pose>16.146988 141.783096 26.851727 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>31.678005 46.917999 53.457998</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="collider_building15">
+          <pose>17.738343 72.192444 6.404460 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>31.278044 26.018005 31.498045</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="collider_building16">
+          <pose>69.567764 113.782516 8.601976 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>31.278046 26.018005 20.898045</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="collider_building17">
+          <pose>169.849655 122.447742 9.222115 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>26.818054 25.218010 16.578045</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="collider_building18">
+          <pose>259.428040 33.280625 3.760306 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>76.257996 53.398010 10.938045</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="collider_building19">
+          <pose>259.398010 163.473862 4.091821 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>76.257996 53.398010 10.938046</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="collider_building2">
+          <pose>282.468201 75.093338 16.967942 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>31.598022 31.298004 31.498046</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="collider_building20">
+          <pose>162.255234 147.210125 7.783752 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>57.458008 47.858009 10.938046</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="collider_building21">
+          <pose>48.452851 149.449245 4.515328 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>72.158003 47.858009 10.938046</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="collider_building22">
+          <pose>41.791122 30.332139 4.733166 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>21.618004 36.498008 10.938046</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="collider_building23">
+          <pose>17.438889 52.291824 4.891075 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>32.898002 18.978004 10.938046</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="collider_building3">
+          <pose>281.907898 122.863556 16.398667 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>31.598022 31.298004 31.498046</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="collider_building4">
+          <pose>285.485107 175.779129 22.574821 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>39.118042 49.638031 55.078041</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="collider_building5">
+          <pose>228.874435 42.274947 20.154263 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>32.498047 40.818003 42.798042</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="collider_building6">
+          <pose>229.188705 155.465408 14.743800 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>31.598053 40.817993 47.658045</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="collider_building7">
+          <pose>175.981277 34.291367 21.682293 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>32.498047 46.378005 44.798042</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="collider_building8">
+          <pose>174.688156 171.457504 27.733734 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>31.678009 41.078003 51.797997</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="collider_building9">
+          <pose>122.454819 29.151352 19.490588 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>33.158051 48.558006 53.358042</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="collider_building9_001">
+          <pose>164.771896 22.358703 12.421501 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>55.877991 30.778009 10.938046</size>
+            </box>
+          </geometry>
+        </collision>
+        <collision name="collider_building9_002">
+          <pose>146.908253 48.108963 36.702584 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>63.958000 15.898010 10.938047</size>
+            </box>
+          </geometry>
+        </collision>
+      </link>
+    </model>
+    <model name="yellow_search_van">
+      <static>true</static>
+      <pose>115 65 0.8 0 0 0</pose>
+      <link name="body">
+        <collision name="collision">
+          <geometry><box><size>4 2 1.8</size></box></geometry>
+        </collision>
+        <visual name="yellow_body">
+          <pose>-0.35 0 -0.15 0 0 0</pose>
+          <geometry><box><size>3.3 2 1.5</size></box></geometry>
+          <material>
+            <ambient>1 0.72 0.02 1</ambient>
+            <diffuse>1 0.72 0.02 1</diffuse>
+            <specular>0.15 0.15 0.08 1</specular>
+          </material>
+        </visual>
+        <visual name="yellow_cab">
+          <pose>1.45 0 -0.3 0 0 0</pose>
+          <geometry><box><size>0.7 1.9 1.2</size></box></geometry>
+          <material><ambient>1 0.72 0.02 1</ambient><diffuse>1 0.72 0.02 1</diffuse></material>
+        </visual>
+        <visual name="windshield">
+          <pose>1.811 0 -0.05 0 0 0</pose>
+          <geometry><box><size>0.025 1.5 0.5</size></box></geometry>
+          <material><ambient>0.03 0.08 0.12 1</ambient><diffuse>0.05 0.16 0.22 1</diffuse></material>
+        </visual>
+        <visual name="wheel_fl"><pose>1.15 1.0 -0.65 1.570796 0 0</pose><geometry><cylinder><radius>0.36</radius><length>0.22</length></cylinder></geometry><material><ambient>0.02 0.02 0.02 1</ambient><diffuse>0.03 0.03 0.03 1</diffuse></material></visual>
+        <visual name="wheel_fr"><pose>1.15 -1.0 -0.65 1.570796 0 0</pose><geometry><cylinder><radius>0.36</radius><length>0.22</length></cylinder></geometry><material><ambient>0.02 0.02 0.02 1</ambient><diffuse>0.03 0.03 0.03 1</diffuse></material></visual>
+        <visual name="wheel_rl"><pose>-1.15 1.0 -0.65 1.570796 0 0</pose><geometry><cylinder><radius>0.36</radius><length>0.22</length></cylinder></geometry><material><ambient>0.02 0.02 0.02 1</ambient><diffuse>0.03 0.03 0.03 1</diffuse></material></visual>
+        <visual name="wheel_rr"><pose>-1.15 -1.0 -0.65 1.570796 0 0</pose><geometry><cylinder><radius>0.36</radius><length>0.22</length></cylinder></geometry><material><ambient>0.02 0.02 0.02 1</ambient><diffuse>0.03 0.03 0.03 1</diffuse></material></visual>
+      </link>
+    </model>
+  </world>
+</sdf>

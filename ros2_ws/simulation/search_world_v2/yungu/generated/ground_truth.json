@@ -1,0 +1,16 @@
+{
+  "evaluator_only": true,
+  "schema_version": "1.0",
+  "seed": 2030,
+  "targets": [
+    {
+      "entity_id": "yellow-search-van",
+      "model_name": "yellow_search_van",
+      "pose_enu_m": {"x": 115.0, "y": 65.0, "z": 0.8, "yaw_rad": 0.0},
+      "query": "yellow-van",
+      "semantic_region_id": "SEM_ROAD_CONNECTOR_NORTH",
+      "slot_id": "yungu-road-target-1"
+    }
+  ],
+  "world_name": "gsi_search_world_v2_yungu"
+}
