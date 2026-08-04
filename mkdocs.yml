@@ -42,6 +42,7 @@ nav:
           - Planner / Validator / Solver: en/concepts/planner-validator-solver.md
           - Replan and New Case: en/concepts/replan-newcase.md
           - Evaluation Metrics: en/concepts/evaluation-metrics.md
+          - Related Work and Research Gaps: en/concepts/related-work-and-research-gaps.md
       - Tutorials:
           - Run a Single Task: en/tutorials/run-single-task.md
           - Run Benchmark: en/tutorials/run-benchmark.md
@@ -87,6 +88,7 @@ nav:
           - Planner / Validator / Solver: zh/concepts/planner-validator-solver.md
           - Replan 与 New Case: zh/concepts/replan-newcase.md
           - 评估指标: zh/concepts/evaluation-metrics.md
+          - 相关工作与论文工作缺口: zh/concepts/related-work-and-research-gaps.md
       - 教程:
           - 运行单个任务: zh/tutorials/run-single-task.md
           - 运行 Benchmark: zh/tutorials/run-benchmark.md

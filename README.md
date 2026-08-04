@@ -150,3 +150,9 @@ evidence is recorded in
 The complete mathematical specification, policy equations, benchmark design,
 and statistical estimators are documented in
 [`docs/zh/concepts/search-intelligence-mathematics.md`](docs/zh/concepts/search-intelligence-mathematics.md).
+
+The literature map for developing this repository into a research paper,
+including related papers, open-source baselines, relevant patents, method-to-
+reference mappings, and the remaining research gaps, is available in
+[English](docs/en/concepts/related-work-and-research-gaps.md) and
+[Chinese](docs/zh/concepts/related-work-and-research-gaps.md).

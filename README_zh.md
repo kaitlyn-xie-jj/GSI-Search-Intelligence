@@ -464,6 +464,7 @@ python run/run_collect_replan_dataset.py --help
 - 系统架构：[docs/zh/concepts/architecture.md](docs/zh/concepts/architecture.md)
 - 配置参考：[docs/zh/reference/config.md](docs/zh/reference/config.md)
 - 训练概览：[docs/zh/training/overview.md](docs/zh/training/overview.md)
+- 相关工作、参考文献与论文工作缺口：[docs/zh/concepts/related-work-and-research-gaps.md](docs/zh/concepts/related-work-and-research-gaps.md)
 
 本地网页预览：
 
