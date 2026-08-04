@@ -21,6 +21,7 @@ from .pointcloud_projection import PointCloudGroundProjector
 from .scenario_context import load_search_scenario_context
 
 from modules.search_intelligence import (
+    AdaptiveActiveSearchPolicy,
     ActiveSearchPolicy,
     BayesianBeliefUpdater,
     BinarySensorModel,
@@ -110,6 +111,13 @@ class GsiSearchNode(Node):
             "search_prior_path": "",
             "sensor_detection_probability": 0.85,
             "sensor_false_positive_probability": 0.01,
+            "active_detection_weight": 1.0,
+            "active_information_gain_weight": 1.0,
+            "active_novelty_weight": 0.25,
+            "active_travel_weight": 0.1,
+            "active_adaptive_weights_enabled": True,
+            "active_distance_scale_mode": "fixed",
+            "active_distance_scale_m": 100.0,
             "position_tolerance_m": 0.75,
             "velocity_tolerance_mps": 0.25,
             "settle_time_s": 1.0,
@@ -264,9 +272,36 @@ class GsiSearchNode(Node):
             ),
         )
         verification_limit = int(self._parameter("verification_followup_limit"))
-        policy = ActiveSearchPolicy(
+        distance_scale_mode = str(
+            self._parameter("active_distance_scale_mode")
+        ).strip().lower()
+        if distance_scale_mode == "map_diagonal":
+            x_min, y_min, x_max, y_max = grid.bounds
+            distance_scale_m = math.hypot(x_max - x_min, y_max - y_min)
+        elif distance_scale_mode == "fixed":
+            distance_scale_m = float(self._parameter("active_distance_scale_m"))
+        else:
+            raise ValueError(
+                "active_distance_scale_mode must be fixed or map_diagonal"
+            )
+        adaptive_weights_enabled = bool(
+            self._parameter("active_adaptive_weights_enabled")
+        )
+        policy_type = (
+            AdaptiveActiveSearchPolicy
+            if adaptive_weights_enabled
+            else ActiveSearchPolicy
+        )
+        policy = policy_type(
             candidates,
             sensor_model=sensor_model,
+            detection_weight=float(self._parameter("active_detection_weight")),
+            information_gain_weight=float(
+                self._parameter("active_information_gain_weight")
+            ),
+            novelty_weight=float(self._parameter("active_novelty_weight")),
+            travel_weight=float(self._parameter("active_travel_weight")),
+            distance_scale_m=distance_scale_m,
             verification_followup_limit=(
                 verification_limit if verification_limit > 0 else None
             ),
@@ -284,13 +319,25 @@ class GsiSearchNode(Node):
             current_viewpoint=actual,
             initial_policy_metadata={
                 "source": "ros2_gazebo_harmonic",
+                "active_utility_weights": {
+                    "detection": float(self._parameter("active_detection_weight")),
+                    "information_gain": float(
+                        self._parameter("active_information_gain_weight")
+                    ),
+                    "novelty": float(self._parameter("active_novelty_weight")),
+                    "travel": float(self._parameter("active_travel_weight")),
+                },
+                "active_distance_scale_mode": distance_scale_mode,
+                "active_distance_scale_m": distance_scale_m,
+                "active_adaptive_weights_enabled": adaptive_weights_enabled,
                 **scenario.policy_metadata,
             },
             search_grid=grid,
             belief_updater=BayesianBeliefUpdater(sensor_model),
         )
         self.get_logger().info(
-            f"Initialized active search with {len(candidates)} candidate viewpoints; "
+            f"Initialized {'adaptive' if adaptive_weights_enabled else 'fixed'} "
+            f"active search with {len(candidates)} candidate viewpoints; "
             f"semantics={scenario.policy_metadata['semantic_map_loaded']}, "
             f"prior={scenario.policy_metadata['prior_loaded']}"
         )

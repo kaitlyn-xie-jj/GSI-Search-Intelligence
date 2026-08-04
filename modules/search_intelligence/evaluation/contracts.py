@@ -11,7 +11,14 @@ from ..contracts import SearchTask, Viewpoint
 from ..search_space import SearchGrid
 
 
-SUPPORTED_POLICIES = ("coverage", "random", "greedy_prior", "active")
+SUPPORTED_POLICIES = (
+    "coverage",
+    "random",
+    "greedy_prior",
+    "active",
+    "adaptive_active",
+    "lookahead_active",
+)
 
 
 @dataclass(frozen=True)
@@ -91,7 +98,9 @@ class SearchBenchmarkConfig:
     novelty_weight: float = 0.25
     travel_weight: float = 0.1
     distance_scale_m: float = 100.0
+    distance_scale_mode: str = "fixed"
     verification_followup_limit: Optional[int] = None
+    lookahead_discount_factor: float = 1.0
     persistent_distractor_probability: float = 0.0
     false_alarm_correlation: float = 0.0
     correlated_false_alarm_shared_identity: bool = False
@@ -157,11 +166,17 @@ class SearchBenchmarkConfig:
             and self.verification_followup_limit <= 0
         ):
             raise ValueError("verification_followup_limit must be positive")
+        if not 0.0 <= self.lookahead_discount_factor <= 1.0:
+            raise ValueError("lookahead_discount_factor must be within [0, 1]")
         if (
             not math.isfinite(self.localization_error_std_m)
             or self.localization_error_std_m < 0
         ):
             raise ValueError("localization_error_std_m must be finite and non-negative")
+        if self.distance_scale_mode not in {"fixed", "map_diagonal"}:
+            raise ValueError(
+                "distance_scale_mode must be fixed or map_diagonal"
+            )
         object.__setattr__(self, "policy_names", names)
 
     def start_viewpoint(self, scenario: SearchBenchmarkScenario) -> Viewpoint:
@@ -171,6 +186,13 @@ class SearchBenchmarkConfig:
             z=self.altitude_m,
             yaw=0.0,
         )
+
+    def distance_scale_for(self, scenario: SearchBenchmarkScenario) -> float:
+        """Return a fixed or map-relative travel-distance normalization."""
+        if self.distance_scale_mode == "fixed":
+            return self.distance_scale_m
+        x_min, y_min, x_max, y_max = scenario.grid.bounds
+        return math.hypot(x_max - x_min, y_max - y_min)
 
     def to_dict(self) -> Dict[str, Any]:
         data = asdict(self)

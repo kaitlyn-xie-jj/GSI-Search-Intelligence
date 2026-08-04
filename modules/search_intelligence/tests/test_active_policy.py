@@ -1,7 +1,9 @@
 import unittest
 
 from modules.search_intelligence import (
+    AdaptiveActiveSearchPolicy,
     ActiveSearchPolicy,
+    BeliefLookaheadPolicy,
     BayesianBeliefUpdater,
     BinarySensorModel,
     GreedyPriorPolicy,
@@ -210,6 +212,122 @@ class CandidatePolicyTests(unittest.TestCase):
             "candidate-0",
         )
         self.assertEqual(len(session.policy_decisions), 2)
+
+    def test_adaptive_policy_boosts_exploration_when_uncertain_and_early(self):
+        state = SearchState.initial(
+            self.task,
+            dict.fromkeys(self.cell_ids, 1.0 / len(self.cell_ids)),
+            policy_metadata={
+                "initial_belief_entropy_nats": 1.0986122886681098,
+                "prior_confidence": 0.1,
+            },
+        )
+        adaptive = AdaptiveActiveSearchPolicy(self.candidates).adaptive_weight_state(state)
+
+        self.assertGreater(
+            adaptive.multipliers["information_gain"],
+            adaptive.multipliers["detection"],
+        )
+        self.assertGreater(
+            adaptive.multipliers["novelty"],
+            adaptive.multipliers["detection"],
+        )
+        self.assertEqual(adaptive.budget_progress, 0.0)
+
+    def test_adaptive_policy_boosts_detection_and_travel_late(self):
+        early = SearchState.initial(
+            self.task,
+            dict(zip(self.cell_ids, (0.8, 0.15, 0.05))),
+            policy_metadata={
+                "initial_belief_entropy_nats": 1.0986122886681098,
+                "prior_confidence": 0.9,
+            },
+        )
+        late = SearchState(
+            task=self.task,
+            belief=dict(zip(self.cell_ids, (0.97, 0.02, 0.01))),
+            observed_cell_quality=dict.fromkeys(self.cell_ids, 1.0),
+            step_index=2,
+            policy_metadata=early.policy_metadata,
+        )
+        policy = AdaptiveActiveSearchPolicy(self.candidates)
+        early_weights = policy.adaptive_weight_state(early)
+        late_weights = policy.adaptive_weight_state(late)
+
+        self.assertGreater(
+            late_weights.multipliers["detection"],
+            early_weights.multipliers["detection"],
+        )
+        self.assertGreater(
+            late_weights.multipliers["travel"],
+            early_weights.multipliers["travel"],
+        )
+        self.assertGreater(late_weights.budget_progress, 0.5)
+
+    def test_adaptive_weights_are_normalized_and_auditable(self):
+        state = self._state()
+        policy = AdaptiveActiveSearchPolicy(self.candidates)
+        weights = policy.adaptive_weight_state(state).adaptive_weights
+        selected = policy.select_next(state)
+        metadata = policy.decision_metadata(state, selected)
+
+        self.assertAlmostEqual(sum(weights.values()), 1.0)
+        self.assertTrue(all(value >= 0.0 for value in weights.values()))
+        self.assertIn("adaptive_weight_state", metadata)
+        self.assertEqual(
+            metadata["adaptive_weight_state"]["adaptive_weights"],
+            weights,
+        )
+
+    def test_fixed_active_policy_metadata_remains_non_adaptive(self):
+        state = self._state()
+        policy = ActiveSearchPolicy(self.candidates)
+        selected = policy.select_next(state)
+
+        self.assertNotIn(
+            "adaptive_weight_state",
+            policy.decision_metadata(state, selected),
+        )
+
+    def test_lookahead_score_exposes_normalized_binary_branches(self):
+        policy = BeliefLookaheadPolicy(self.candidates, discount_factor=0.8)
+
+        score = policy.score_candidates(self._state())[0]
+
+        self.assertEqual({branch.observation for branch in score.branches}, {
+            "positive",
+            "negative",
+        })
+        self.assertAlmostEqual(
+            sum(branch.probability for branch in score.branches),
+            1.0,
+        )
+        self.assertAlmostEqual(
+            score.utility,
+            score.immediate_score.utility
+            + 0.8 * score.expected_continuation_utility,
+        )
+        self.assertTrue(all(
+            branch.posterior_entropy_nats >= 0.0
+            for branch in score.branches
+        ))
+
+    def test_zero_discount_reduces_lookahead_to_greedy_utility(self):
+        state = self._state()
+        greedy = ActiveSearchPolicy(self.candidates).score_candidates(state)
+        lookahead = BeliefLookaheadPolicy(
+            self.candidates,
+            discount_factor=0.0,
+        ).score_candidates(state)
+
+        self.assertEqual(
+            [score.candidate_id for score in lookahead],
+            [score.candidate_id for score in greedy],
+        )
+        self.assertEqual(
+            [score.utility for score in lookahead],
+            [score.utility for score in greedy],
+        )
 
     def _verification_case(
         self,

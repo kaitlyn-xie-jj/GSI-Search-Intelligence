@@ -111,3 +111,37 @@ viewpoint. Combined episode CSV rows include detection-source counts and mean
 localization error. A shorter failed episode is not an efficiency gain when it
 terminated on a distractor; distance and SPL must be interpreted with true
 success and false-positive rate.
+
+## Offline utility calibration
+
+The offline optimizer tunes only the four `ActiveSearchPolicy` utility weights.
+Detector reliability remains a calibrated sensor input rather than a free policy
+parameter. The default split is intentionally disjoint by geometry:
+
+- train: `compact_rectangle`;
+- validation: `large_rectangle`;
+- held-out test: `l_shape`.
+
+All splits contain near/far targets and correct, diffuse, uniform, and misleading
+priors. Candidates are ranked on train, only the train top-k are considered on
+validation, and the held-out test is evaluated only after selection. The current
+production default is always included in that top-k as a no-regression guard.
+It is replaced only when the paired candidate-minus-default validation objective
+has a strictly positive 95% confidence lower bound and its mean improvement is at
+least the configured practical threshold (default `0.01`).
+Travel cost uses the map diagonal so a weight does not encode one fixed map size.
+
+Run a small pilot with:
+
+```bash
+python run/run_search_offline_optimization.py \
+  --candidates 24 \
+  --validation-candidates 6 \
+  --repetitions 3 \
+  --seed 20260801
+```
+
+The output includes the complete candidate audit table, default-versus-selected
+split metrics, per-episode scalar records, and
+`selected_active_search_policy.json`. The held-out result must not be used to
+rerun selection; doing so turns the test layout into validation.

@@ -47,6 +47,8 @@ remain responsible for vehicle control and execution.
   25-minute resource stability gate.
 - SearchWorld V2 with campus, industrial, and suburban map families, a nadir
   RGB-D X500, area-normalized semantic priors, and repeated batch execution.
+- Leakage-resistant offline calibration for the ActiveSearch utility weights,
+  with layout-held-out train, validation, and test splits.
 
 ## Repository Layout
 

@@ -46,8 +46,8 @@ def main() -> int:
     parser.add_argument(
         "--policies",
         nargs="+",
-        default=("coverage", "random", "greedy_prior", "active"),
-        choices=("coverage", "random", "greedy_prior", "active"),
+        default=("coverage", "random", "greedy_prior", "active", "adaptive_active"),
+        choices=("coverage", "random", "greedy_prior", "active", "adaptive_active"),
     )
     parser.add_argument("--repetitions", type=int, default=20)
     parser.add_argument("--seed", type=int, default=0)

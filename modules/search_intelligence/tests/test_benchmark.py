@@ -65,6 +65,16 @@ class SearchBenchmarkContractTests(unittest.TestCase):
         self.assertGreaterEqual(metric.ci95_low, 0.0)
         self.assertLessEqual(metric.ci95_high, 1.0)
 
+    def test_map_diagonal_distance_scale_is_layout_relative(self):
+        config = SearchBenchmarkConfig(distance_scale_mode="map_diagonal")
+        scenario = default_benchmark_scenarios()[0]
+
+        self.assertAlmostEqual(config.distance_scale_for(scenario), 128.0624847)
+
+    def test_unknown_distance_scale_mode_is_rejected(self):
+        with self.assertRaises(ValueError):
+            SearchBenchmarkConfig(distance_scale_mode="unknown")
+
 
 class SearchBenchmarkRunnerTests(unittest.TestCase):
     def setUp(self):
@@ -86,15 +96,47 @@ class SearchBenchmarkRunnerTests(unittest.TestCase):
         self.assertFalse(first.false_positive)
         self.assertEqual(len(first.belief_entropy_trace), first.steps + 1)
 
+    def test_adaptive_episode_is_reproducible_and_logs_weights(self):
+        runner = SearchEpisodeRunner(self.config)
+
+        first = runner.run(self.scenario, "adaptive_active", repetition=1)
+        second = runner.run(self.scenario, "adaptive_active", repetition=1)
+
+        self.assertEqual(first, second)
+        self.assertTrue(first.policy_trace)
+        self.assertTrue(all(
+            "adaptive_weight_state" in decision
+            for decision in first.policy_trace
+        ))
+
+    def test_lookahead_episode_is_reproducible_and_logs_value_decomposition(self):
+        runner = SearchEpisodeRunner(self.config)
+
+        first = runner.run(self.scenario, "lookahead_active", repetition=1)
+        second = runner.run(self.scenario, "lookahead_active", repetition=1)
+
+        self.assertEqual(first, second)
+        self.assertTrue(first.policy_trace)
+        selected = first.policy_trace[0]["selected_viewpoint_score"]
+        self.assertIn("branches", selected)
+        self.assertIn("expected_continuation_utility", selected)
+
     def test_suite_runs_every_policy_on_every_repetition(self):
         report = SearchBenchmarkRunner(self.config).run((self.scenario,))
 
-        self.assertEqual(len(report.episodes), 8)
-        self.assertEqual(len(report.aggregates), 4)
-        self.assertEqual(len(report.condition_aggregates), 4)
+        self.assertEqual(len(report.episodes), 12)
+        self.assertEqual(len(report.aggregates), 6)
+        self.assertEqual(len(report.condition_aggregates), 6)
         self.assertEqual(
             {item.policy_name for item in report.aggregates},
-            {"coverage", "random", "greedy_prior", "active"},
+            {
+                "coverage",
+                "random",
+                "greedy_prior",
+                "active",
+                "adaptive_active",
+                "lookahead_active",
+            },
         )
         self.assertTrue(all(item.episode_count == 2 for item in report.aggregates))
 
@@ -261,9 +303,9 @@ class SearchBenchmarkRunnerTests(unittest.TestCase):
             })
             self.assertTrue(all(Path(path).is_file() for path in paths.values()))
             payload = json.loads(Path(paths["report_json"]).read_text("utf-8"))
-            self.assertEqual(len(payload["episodes"]), 8)
-            self.assertEqual(len(payload["aggregates"]), 4)
-            self.assertEqual(len(payload["condition_aggregates"]), 4)
+            self.assertEqual(len(payload["episodes"]), 12)
+            self.assertEqual(len(payload["aggregates"]), 6)
+            self.assertEqual(len(payload["condition_aggregates"]), 6)
 
 
 if __name__ == "__main__":

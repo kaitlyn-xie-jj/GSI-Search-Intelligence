@@ -10,7 +10,9 @@ from ..belief import BayesianBeliefUpdater, BeliefMap
 from ..contracts import SearchObservation, TargetDetection, Viewpoint
 from ..execution import SearchSession
 from ..policies import (
+    AdaptiveActiveSearchPolicy,
     ActiveSearchPolicy,
+    BeliefLookaheadPolicy,
     CoveragePolicy,
     GreedyPriorPolicy,
     RandomPolicy,
@@ -56,6 +58,7 @@ class SearchEpisodeRunner:
                 "search_policy": policy_name,
                 "benchmark_scenario_id": scenario.scenario_id,
                 "prior_condition": scenario.prior_condition,
+                "prior_confidence": scenario.metadata.get("prior_confidence", 0.5),
             },
             search_grid=scenario.grid,
             belief_updater=BayesianBeliefUpdater(self.config.sensor_model),
@@ -222,6 +225,7 @@ class SearchEpisodeRunner:
         candidates: Tuple[ViewpointCandidate, ...],
         seed: int,
     ) -> SearchPolicy:
+        distance_scale_m = self.config.distance_scale_for(scenario)
         if policy_name == "coverage":
             return CoveragePolicy(
                 pass_spacing_m=self.config.coverage_pass_spacing_m,
@@ -234,10 +238,15 @@ class SearchEpisodeRunner:
             return GreedyPriorPolicy(
                 candidates,
                 scenario.initial_belief,
-                distance_scale_m=self.config.distance_scale_m,
+                distance_scale_m=distance_scale_m,
             )
-        if policy_name == "active":
-            return ActiveSearchPolicy(
+        if policy_name in {"active", "adaptive_active"}:
+            policy_type = (
+                AdaptiveActiveSearchPolicy
+                if policy_name == "adaptive_active"
+                else ActiveSearchPolicy
+            )
+            return policy_type(
                 candidates,
                 sensor_model=self.config.sensor_model,
                 observation_quality=self.config.observation_quality,
@@ -245,10 +254,23 @@ class SearchEpisodeRunner:
                 information_gain_weight=self.config.information_gain_weight,
                 novelty_weight=self.config.novelty_weight,
                 travel_weight=self.config.travel_weight,
-                distance_scale_m=self.config.distance_scale_m,
+                distance_scale_m=distance_scale_m,
                 verification_followup_limit=(
                     self.config.verification_followup_limit
                 ),
+            )
+        if policy_name == "lookahead_active":
+            return BeliefLookaheadPolicy(
+                candidates,
+                sensor_model=self.config.sensor_model,
+                observation_quality=self.config.observation_quality,
+                detection_weight=self.config.detection_weight,
+                information_gain_weight=self.config.information_gain_weight,
+                novelty_weight=self.config.novelty_weight,
+                travel_weight=self.config.travel_weight,
+                distance_scale_m=distance_scale_m,
+                verification_followup_limit=self.config.verification_followup_limit,
+                discount_factor=self.config.lookahead_discount_factor,
             )
         raise ValueError(f"unsupported benchmark policy: {policy_name}")
 
