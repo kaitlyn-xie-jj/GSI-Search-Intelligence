@@ -1,0 +1,18 @@
+#!/bin/sh
+# @name Gazebo X500 with GSI long-range nadir RGB-D
+# @type Quadrotor
+
+PX4_SIM_MODEL=${PX4_SIM_MODEL:=x500_gsi_rgbd_nadir_longrange}
+
+. ${R}etc/init.d-posix/airframes/4001_gz_x500
+
+param set-default CBRK_SUPPLY_CHK 894281
+param set-default NAV_DLL_ACT 0
+
+# Yungu search legs can exceed 100 m. Keep trajectory limits in PX4's
+# validated mc_pos_control path so distant Offboard position goals brake and
+# turn without saturating attitude or altitude hold.
+param set-default MPC_XY_VEL_MAX 1.0
+param set-default MPC_ACC_HOR 2.0
+param set-default MPC_ACC_HOR_MAX 2.0
+param set-default MPC_TILTMAX_AIR 20.0

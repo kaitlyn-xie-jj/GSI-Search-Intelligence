@@ -8,6 +8,7 @@ import sys
 import time
 
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Image
@@ -73,12 +74,13 @@ def main() -> None:
     node = RgbTopicRecorder(args.topic, args.width, args.height, args.fps)
     try:
         rclpy.spin(node)
-    except (BrokenPipeError, KeyboardInterrupt):
+    except (BrokenPipeError, KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         print(f"recorded_frames={node.frame_count}", file=sys.stderr)
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":

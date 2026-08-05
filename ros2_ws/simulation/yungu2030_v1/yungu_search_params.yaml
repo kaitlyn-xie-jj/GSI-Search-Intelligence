@@ -1,0 +1,121 @@
+gsi_search_node:
+  ros__parameters:
+    use_sim_time: true
+    target_query: yellow-van
+    area_id: yungu2030_local_origin
+    area_min_x_m: -4.835387
+    area_min_y_m: -10.610370
+    area_max_x_m: 324.729980
+    area_max_y_m: 210.563126
+    grid_resolution_m: 10.0
+    flight_altitude_m: 70.0
+    sensor_footprint_radius_m: 40.0
+    max_viewpoints: 60
+    min_confirmations: 2
+    max_localization_error_m: 8.0
+    verification_followup_limit: 0
+    semantic_map_path: /workspace/VisionFlow-PX4/Tools/simulation/gz/worlds/yungu2030_semantic_map.json
+    search_prior_path: simulation/yungu2030_v1/yungu_search_prior.json
+    sensor_detection_probability: 0.85
+    sensor_false_positive_probability: 0.01
+    # Half a grid cell is sufficient for a 40 m nadir footprint and avoids
+    # treating PX4's slow final position convergence as a failed viewpoint.
+    position_tolerance_m: 5.0
+    velocity_tolerance_mps: 0.5
+    settle_time_s: 1.0
+    goal_republish_interval_s: 0.5
+    progress_log_interval_s: 5.0
+    # Headless Yungu rendering has an observed RGB cadence below the nominal
+    # 10 Hz. Keep each observation valid across the measured frame jitter.
+    sensor_timeout_s: 3.0
+    maximum_sensor_skew_s: 3.0
+    minimum_observation_quality: 0.5
+    require_detections: true
+    require_point_cloud: true
+    record_first_positive_detection_in_transit: true
+    transit_detection_max_sensor_skew_s: 1.0
+    transit_detection_min_observation_quality: 0.5
+    detections_in_map_frame: true
+    map_origin_x_m: 42.0
+    map_origin_y_m: 90.0
+    map_origin_z_m: 0.0
+    camera_translation_x_m: 0.12
+    camera_translation_y_m: 0.0
+    camera_translation_z_m: -0.05
+    camera_roll_rad: 0.0
+    camera_pitch_rad: 1.570796
+    camera_yaw_rad: 0.0
+    ground_plane_z_m: 0.0
+    ground_tolerance_m: 0.35
+    visibility_point_resolution_m: 0.5
+    pointcloud_sample_limit: 10000
+    pointcloud_maximum_range_m: 90.0
+    pointcloud_frame_id: gsi_rgbd_link
+    odom_topic: /mavros/local_position/odom
+    imu_topic: /mavros/imu/data
+    rgb_topic: /oakd1/rgb/image
+    camera_info_topic: /oakd1/rgb/camera_info
+    depth_topic: /oakd1/depth/image
+    point_cloud_topic: /oakd1/depth/points
+    detections_topic: /gsi/detections
+    battery_topic: /mavros/battery
+    goal_pose_topic: /gsi/uav/goal_pose
+    outcome_topic: /gsi/search/outcome
+    trace_output_path: /tmp/GSI/results/yungu2030_sensor_validation/search_trace.jsonl
+
+gsi_mavros_offboard_controller:
+  ros__parameters:
+    use_sim_time: true
+    state_topic: /mavros/state
+    odom_topic: /mavros/local_position/odom
+    goal_pose_topic: /gsi/uav/goal_pose
+    setpoint_topic: /mavros/setpoint_position/local
+    arming_service: /mavros/cmd/arming
+    set_mode_service: /mavros/set_mode
+    map_frame: map
+    map_origin_x_m: 42.0
+    map_origin_y_m: 90.0
+    map_origin_z_m: 0.0
+    setpoint_rate_hz: 20.0
+    prestream_setpoint_count: 100
+    request_interval_s: 2.0
+    auto_offboard: true
+    auto_arm: true
+    staged_takeoff: true
+    takeoff_altitude_tolerance_m: 0.5
+    # PX4's official position controller owns trajectory generation. The
+    # Yungu airframe limits speed, acceleration, and tilt for long search legs.
+    horizontal_setpoint_speed_mps: 0.0
+    horizontal_setpoint_max_lead_m: 0.0
+
+gsi_color_target_detector:
+  ros__parameters:
+    use_sim_time: true
+    rgb_topic: /oakd1/rgb/image
+    rgb_camera_info_topic: /oakd1/rgb/camera_info
+    depth_topic: /oakd1/depth/image
+    depth_camera_info_topic: /oakd1/depth/camera_info
+    odom_topic: /mavros/local_position/odom
+    detections_topic: /gsi/detections
+    target_label: yellow-van
+    target_entity_id: yellow-search-van
+    detection_rate_hz: 5.0
+    sensor_timeout_s: 3.0
+    minimum_red: 150
+    minimum_green: 120
+    maximum_blue: 120
+    minimum_yellow_margin: 60
+    maximum_red_green_difference: 100
+    minimum_pixels: 50
+    depth_window_radius_px: 6
+    minimum_depth_m: 0.2
+    maximum_depth_m: 90.0
+    map_origin_x_m: 42.0
+    map_origin_y_m: 90.0
+    map_origin_z_m: 0.0
+    camera_translation_x_m: 0.12
+    camera_translation_y_m: 0.0
+    camera_translation_z_m: -0.05
+    camera_roll_rad: 0.0
+    camera_pitch_rad: 1.570796
+    camera_yaw_rad: 0.0

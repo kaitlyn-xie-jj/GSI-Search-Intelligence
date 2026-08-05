@@ -56,6 +56,8 @@ class GsiSearchNode(Node):
         self._command_start_battery: Optional[float] = None
         self._settled_since_s: Optional[float] = None
         self._last_goal_publish_s = float("-inf")
+        self._last_progress_log_s = float("-inf")
+        self._transit_detection_recorded = False
         self._outcome_published = False
         self._pointcloud_projector = PointCloudGroundProjector(
             camera_translation=(
@@ -122,10 +124,15 @@ class GsiSearchNode(Node):
             "velocity_tolerance_mps": 0.25,
             "settle_time_s": 1.0,
             "goal_republish_interval_s": 0.5,
+            "progress_log_interval_s": 5.0,
             "sensor_timeout_s": 0.5,
             "maximum_sensor_skew_s": 0.25,
+            "minimum_observation_quality": 0.0,
             "require_detections": True,
             "require_point_cloud": False,
+            "record_first_positive_detection_in_transit": False,
+            "transit_detection_max_sensor_skew_s": 1.0,
+            "transit_detection_min_observation_quality": 0.5,
             "camera_translation_x_m": 0.0,
             "camera_translation_y_m": 0.0,
             "camera_translation_z_m": 0.0,
@@ -140,6 +147,9 @@ class GsiSearchNode(Node):
             "pointcloud_frame_id": "camera_link",
             "battery_capacity_wh": 0.0,
             "detections_in_map_frame": True,
+            "map_origin_x_m": 0.0,
+            "map_origin_y_m": 0.0,
+            "map_origin_z_m": 0.0,
             "odom_topic": "/uav/odom",
             "imu_topic": "/uav/imu",
             "rgb_topic": "/uav/camera/image_raw",
@@ -214,18 +224,30 @@ class GsiSearchNode(Node):
             self._start_viewpoint_action(viewpoint)
             return
         self._republish_goal_if_due()
+        if self._can_record_positive_detection_in_transit():
+            self._transit_detection_recorded = True
+            self._record_sensor_observation("positive_detection_in_transit")
+            return
         if not self._is_settled_at(self._commanded_viewpoint):
             self._settled_since_s = None
+            self._log_progress("traveling")
             return
         now = self._now_s()
         if self._settled_since_s is None:
             self._settled_since_s = now
             return
         if now - self._settled_since_s < float(self._parameter("settle_time_s")):
+            self._log_progress("settling")
             return
         if not self._required_sensors_are_fresh():
+            self._log_progress("waiting_for_sensors")
             return
-        self._record_sensor_observation()
+        if self._predicted_observation_quality() < float(
+            self._parameter("minimum_observation_quality")
+        ):
+            self._log_progress("waiting_for_observation_quality")
+            return
+        self._record_sensor_observation("settled_viewpoint")
 
     def _initialize_session(self) -> None:
         actual = self._actual_viewpoint()
@@ -373,7 +395,7 @@ class GsiSearchNode(Node):
         self._goal_publisher.publish(message)
         self._last_goal_publish_s = self._now_s()
 
-    def _record_sensor_observation(self) -> None:
+    def _record_sensor_observation(self, trigger: str) -> None:
         assert self._session is not None
         assert self._adapter is not None
         assert self._commanded_viewpoint is not None
@@ -408,6 +430,7 @@ class GsiSearchNode(Node):
                 for name, item in fresh.items()
             },
             metadata={
+                "observation_trigger": trigger,
                 "rgb_available": "rgb" in fresh,
                 "depth_available": "depth" in fresh,
                 "point_cloud_available": "point_cloud" in fresh,
@@ -431,7 +454,7 @@ class GsiSearchNode(Node):
             ),
         })
         self.get_logger().info(
-            f"Recorded viewpoint {state.step_index}; "
+            f"Recorded viewpoint {state.step_index} via {trigger}; "
             f"detections={len(observation.detections)}, "
             f"visible_cells={len(observation.visible_cell_ids)}, "
             f"ground_points={len(visible_ground_points)}, "
@@ -442,18 +465,63 @@ class GsiSearchNode(Node):
         if self._session.completed:
             self._publish_outcome()
 
+    def _can_record_positive_detection_in_transit(self) -> bool:
+        if (
+            self._transit_detection_recorded
+            or not bool(self._parameter("record_first_positive_detection_in_transit"))
+            or self._session is None
+            or self._session.state.step_index > 0
+            or not self._required_sensors_are_fresh()
+        ):
+            return False
+        maximum_skew = float(
+            self._parameter("transit_detection_max_sensor_skew_s")
+        )
+        minimum_quality = max(
+            float(self._parameter("minimum_observation_quality")),
+            float(self._parameter("transit_detection_min_observation_quality")),
+        )
+        return (
+            self._dynamic_sensor_receipt_skew_s() <= maximum_skew
+            and self._predicted_observation_quality()
+            >= minimum_quality
+            and bool(self._target_detections())
+        )
+
+    def _dynamic_sensor_receipt_skew_s(self) -> float:
+        names = ["odom", "rgb", "depth"]
+        if bool(self._parameter("require_detections")):
+            names.append("detections")
+        if bool(self._parameter("require_point_cloud")):
+            names.append("point_cloud")
+        receipt_times = [self._latest[name][2] for name in names]
+        return max(receipt_times) - min(receipt_times)
+
+    def _predicted_observation_quality(self) -> float:
+        receipt_times = [
+            self._latest[name][2]
+            for name in ("odom", "rgb", "depth")
+        ]
+        return _quality_after_sensor_skew(
+            self._observation_quality(),
+            max(receipt_times) - min(receipt_times),
+            float(self._parameter("maximum_sensor_skew_s")),
+        )
+
     def _required_sensors_are_fresh(self) -> bool:
         now = self._now_s()
         timeout = float(self._parameter("sensor_timeout_s"))
-        required = ["odom", "rgb", "camera_info", "depth"]
+        required = ["odom", "rgb", "depth"]
         if bool(self._parameter("require_detections")):
             required.append("detections")
         if bool(self._parameter("require_point_cloud")):
             required.append("point_cloud")
-        return all(
+        dynamic_inputs_are_fresh = all(
             name in self._latest and now - self._latest[name][2] <= timeout
             for name in required
         )
+        # Camera calibration is static and may be bridged only once at startup.
+        return dynamic_inputs_are_fresh and "camera_info" in self._latest
 
     def _visible_ground_points(
         self,
@@ -463,10 +531,13 @@ class GsiSearchNode(Node):
         if item is None or self._odom is None:
             return ()
         try:
-            return self._pointcloud_projector.project(
+            points = self._pointcloud_projector.project(
                 item[0],
                 self._odom.pose.pose,
             )
+            origin_x = float(self._parameter("map_origin_x_m"))
+            origin_y = float(self._parameter("map_origin_y_m"))
+            return tuple((point[0] + origin_x, point[1] + origin_y) for point in points)
         except (ValueError, struct.error) as error:
             self.get_logger().warning(f"Point-cloud projection skipped: {error}")
             return ()
@@ -530,6 +601,13 @@ class GsiSearchNode(Node):
         return tuple(detections)
 
     def _is_settled_at(self, viewpoint: Viewpoint) -> bool:
+        position_error, speed = self._motion_errors(viewpoint)
+        return (
+            position_error <= float(self._parameter("position_tolerance_m"))
+            and speed <= float(self._parameter("velocity_tolerance_mps"))
+        )
+
+    def _motion_errors(self, viewpoint: Viewpoint) -> Tuple[float, float]:
         actual = self._actual_viewpoint()
         position_error = math.sqrt(
             (actual.x - viewpoint.x) ** 2
@@ -538,17 +616,36 @@ class GsiSearchNode(Node):
         )
         velocity = self._odom.twist.twist.linear
         speed = math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
-        return (
-            position_error <= float(self._parameter("position_tolerance_m"))
-            and speed <= float(self._parameter("velocity_tolerance_mps"))
+        return position_error, speed
+
+    def _log_progress(self, gate: str) -> None:
+        now = self._now_s()
+        interval = float(self._parameter("progress_log_interval_s"))
+        if now >= self._last_progress_log_s and now - self._last_progress_log_s < interval:
+            return
+        self._last_progress_log_s = now
+        assert self._commanded_viewpoint is not None
+        actual = self._actual_viewpoint()
+        position_error, speed = self._motion_errors(self._commanded_viewpoint)
+        sensor_ages = {
+            name: round(max(0.0, now - item[2]), 3)
+            for name, item in self._latest.items()
+            if name in {"odom", "rgb", "camera_info", "depth", "point_cloud", "detections"}
+        }
+        self.get_logger().info(
+            f"Search gate={gate}; actual=({actual.x:.2f}, {actual.y:.2f}, {actual.z:.2f}); "
+            f"target=({self._commanded_viewpoint.x:.2f}, "
+            f"{self._commanded_viewpoint.y:.2f}, {self._commanded_viewpoint.z:.2f}); "
+            f"position_error_m={position_error:.2f}; speed_mps={speed:.2f}; "
+            f"sensor_age_s={sensor_ages}"
         )
 
     def _actual_viewpoint(self) -> Viewpoint:
         pose = self._odom.pose.pose
         return Viewpoint(
-            float(pose.position.x),
-            float(pose.position.y),
-            float(pose.position.z),
+            float(pose.position.x) + float(self._parameter("map_origin_x_m")),
+            float(pose.position.y) + float(self._parameter("map_origin_y_m")),
+            float(pose.position.z) + float(self._parameter("map_origin_z_m")),
             _yaw_from_quaternion(pose.orientation),
             pitch=0.0,
         )
@@ -633,6 +730,17 @@ def _horizontal_position_uncertainty_m(covariance: object) -> float:
     variance_x = max(0.0, values[0])
     variance_y = max(0.0, values[7])
     return math.sqrt(variance_x + variance_y)
+
+
+def _quality_after_sensor_skew(
+    base_quality: float,
+    sensor_skew_s: float,
+    maximum_sensor_skew_s: float,
+) -> float:
+    if maximum_sensor_skew_s <= 0:
+        raise ValueError("maximum_sensor_skew_s must be positive")
+    skew_ratio = min(1.0, max(0.0, sensor_skew_s) / maximum_sensor_skew_s)
+    return max(0.0, min(1.0, base_quality)) * (1.0 - skew_ratio)
 
 
 def _viewpoint_dict(viewpoint: Viewpoint) -> Dict[str, float]:

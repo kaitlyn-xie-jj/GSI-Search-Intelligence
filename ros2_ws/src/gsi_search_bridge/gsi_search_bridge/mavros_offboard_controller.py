@@ -33,6 +33,9 @@ class MavrosOffboardController(Node):
             "arming_service": "/mavros/cmd/arming",
             "set_mode_service": "/mavros/set_mode",
             "map_frame": "map",
+            "map_origin_x_m": 0.0,
+            "map_origin_y_m": 0.0,
+            "map_origin_z_m": 0.0,
             "setpoint_rate_hz": 20.0,
             "prestream_setpoint_count": 40,
             "request_interval_s": 2.0,
@@ -41,6 +44,7 @@ class MavrosOffboardController(Node):
             "staged_takeoff": True,
             "takeoff_altitude_tolerance_m": 0.3,
             "horizontal_setpoint_speed_mps": 0.0,
+            "horizontal_setpoint_max_lead_m": 0.0,
         }
         for name, value in defaults.items():
             self.declare_parameter(name, value)
@@ -66,6 +70,7 @@ class MavrosOffboardController(Node):
         self._takeoff_complete = not bool(self._parameter("staged_takeoff"))
         self._last_reported_state = None
         self._last_goal_signature = None
+        self._last_progress_report_s = float("-inf")
 
         self._publisher = self.create_publisher(
             PoseStamped,
@@ -116,6 +121,7 @@ class MavrosOffboardController(Node):
 
     def _on_odom(self, message: Odometry) -> None:
         self._odom = message
+        self._report_progress()
         if self._initial_pose is not None:
             self._update_takeoff_state()
             return
@@ -127,6 +133,7 @@ class MavrosOffboardController(Node):
             initial.pose.orientation.w = 1.0
         self._initial_pose = initial
         self._setpoint = copy.deepcopy(initial)
+        self._apply_pending_goal()
         self.get_logger().info(
             "Received initial ENU pose: "
             f"x={initial.pose.position.x:.2f}, "
@@ -150,10 +157,15 @@ class MavrosOffboardController(Node):
         goal.header.frame_id = expected_frame
         if _quaternion_norm(goal.pose.orientation) < 1e-6:
             goal.pose.orientation.w = 1.0
-        self._pending_goal = goal
-        self._apply_pending_goal()
+        local_goal = copy.deepcopy(goal)
+        local_goal.pose.position.x -= float(self._parameter("map_origin_x_m"))
+        local_goal.pose.position.y -= float(self._parameter("map_origin_y_m"))
+        local_goal.pose.position.z -= float(self._parameter("map_origin_z_m"))
         signature = _goal_signature(goal)
-        if signature != self._last_goal_signature:
+        goal_changed = signature != self._last_goal_signature
+        self._pending_goal = local_goal
+        if goal_changed:
+            self._apply_pending_goal()
             self.get_logger().info(
                 "Accepted GSI ENU goal: "
                 f"x={goal.pose.position.x:.2f}, "
@@ -168,6 +180,13 @@ class MavrosOffboardController(Node):
         if self._takeoff_complete:
             if float(self._parameter("horizontal_setpoint_speed_mps")) <= 0.0:
                 self._setpoint = copy.deepcopy(self._pending_goal)
+            elif self._odom is not None:
+                # Start each new ramp from the vehicle, not from a setpoint that
+                # may still be far ahead on the previous search leg.
+                self._setpoint.pose = copy.deepcopy(self._odom.pose.pose)
+                self._setpoint.pose.orientation = copy.deepcopy(
+                    self._pending_goal.pose.orientation
+                )
             return
 
         takeoff = copy.deepcopy(self._initial_pose)
@@ -210,6 +229,16 @@ class MavrosOffboardController(Node):
                     self._pending_goal,
                     speed * self._setpoint_period_s,
                 )
+                maximum_lead = float(
+                    self._parameter("horizontal_setpoint_max_lead_m")
+                )
+                if maximum_lead > 0.0 and self._odom is not None:
+                    _limit_horizontal_setpoint_lead(
+                        self._setpoint,
+                        self._pending_goal,
+                        self._odom.pose.pose,
+                        maximum_lead,
+                    )
         self._setpoint.header.stamp = self.get_clock().now().to_msg()
         self._publisher.publish(self._setpoint)
         self._prestream_count += 1
@@ -269,6 +298,25 @@ class MavrosOffboardController(Node):
     def _parameter(self, name: str):
         return self.get_parameter(name).value
 
+    def _report_progress(self) -> None:
+        if self._pending_goal is None or self._setpoint is None or self._odom is None:
+            return
+        now_s = self.get_clock().now().nanoseconds / 1e9
+        if now_s >= self._last_progress_report_s and now_s - self._last_progress_report_s < 5.0:
+            return
+        self._last_progress_report_s = now_s
+        position = self._odom.pose.pose.position
+        velocity = self._odom.twist.twist.linear
+        speed = math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
+        setpoint = self._setpoint.pose.position
+        goal = self._pending_goal.pose.position
+        self.get_logger().info(
+            f"Offboard progress: local=({position.x:.2f}, {position.y:.2f}, {position.z:.2f}); "
+            f"setpoint=({setpoint.x:.2f}, {setpoint.y:.2f}, {setpoint.z:.2f}); "
+            f"goal=({goal.x:.2f}, {goal.y:.2f}, {goal.z:.2f}); "
+            f"speed_mps={speed:.2f}; takeoff_complete={self._takeoff_complete}"
+        )
+
 
 def _pose_is_finite(message: PoseStamped) -> bool:
     values = (
@@ -324,6 +372,36 @@ def _advance_horizontal_setpoint(
         current.pose.position.y += dy * scale
     current.pose.position.z = target.pose.position.z
     current.pose.orientation = copy.deepcopy(target.pose.orientation)
+
+
+def _limit_horizontal_setpoint_lead(
+    current: PoseStamped,
+    target: PoseStamped,
+    actual_pose: object,
+    maximum_lead_m: float,
+) -> None:
+    """Keep the virtual XY target close enough for PX4 to brake cleanly."""
+
+    if maximum_lead_m <= 0.0:
+        raise ValueError("maximum_lead_m must be positive")
+    actual_x = float(actual_pose.position.x)
+    actual_y = float(actual_pose.position.y)
+    target_dx = float(target.pose.position.x) - actual_x
+    target_dy = float(target.pose.position.y) - actual_y
+    target_distance = math.hypot(target_dx, target_dy)
+    if target_distance <= maximum_lead_m:
+        current.pose.position.x = target.pose.position.x
+        current.pose.position.y = target.pose.position.y
+        return
+    current_lead = math.hypot(
+        float(current.pose.position.x) - actual_x,
+        float(current.pose.position.y) - actual_y,
+    )
+    if current_lead <= maximum_lead_m:
+        return
+    scale = maximum_lead_m / target_distance
+    current.pose.position.x = actual_x + target_dx * scale
+    current.pose.position.y = actual_y + target_dy * scale
 
 
 def main(args=None) -> None:

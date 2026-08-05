@@ -46,6 +46,9 @@ class ColorTargetDetector(Node):
             "depth_window_radius_px": 6,
             "minimum_depth_m": 0.2,
             "maximum_depth_m": 19.1,
+            "map_origin_x_m": 0.0,
+            "map_origin_y_m": 0.0,
+            "map_origin_z_m": 0.0,
             "camera_translation_x_m": 0.121998,
             "camera_translation_y_m": -0.002,
             "camera_translation_z_m": 0.064561,
@@ -109,13 +112,19 @@ class ColorTargetDetector(Node):
         self._latest[name] = (message, self._now_s())
 
     def _detect(self) -> None:
-        required = ("rgb", "rgb_info", "depth", "depth_info", "odom")
+        required = ("rgb", "depth", "odom")
         now = self._now_s()
         timeout = float(self._parameter("sensor_timeout_s"))
-        if not all(
+        dynamic_inputs_are_fresh = all(
             name in self._latest and now - self._latest[name][1] <= timeout
             for name in required
-        ):
+        )
+        # Gazebo's CameraInfo bridge commonly emits calibration once at startup.
+        # It is static metadata, so its availability matters but its age does not.
+        calibration_available = all(
+            name in self._latest for name in ("rgb_info", "depth_info")
+        )
+        if not dynamic_inputs_are_fresh or not calibration_available:
             return
 
         output = Detection3DArray()
@@ -162,6 +171,11 @@ class ColorTargetDetector(Node):
         map_point = self._projector.transform_point(
             camera_point,
             self._latest["odom"][0].pose.pose,
+        )
+        map_point = (
+            map_point[0] + float(self._parameter("map_origin_x_m")),
+            map_point[1] + float(self._parameter("map_origin_y_m")),
+            map_point[2] + float(self._parameter("map_origin_z_m")),
         )
 
         detection = Detection3D()

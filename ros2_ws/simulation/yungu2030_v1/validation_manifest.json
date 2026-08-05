@@ -1,0 +1,52 @@
+{
+  "schema_version": "gsi-yungu2030-validation-v1",
+  "scenario_id": "yungu2030_rgbd_px4",
+  "world_name": "yungu2030_local_origin",
+  "semantic_map": "../../../data/yungu2030_v1/semantic_map.json",
+  "configuration": {
+    "search_timeout_s": 600,
+    "capture_duration_s": 615,
+    "minimum_observation_quality": 0.5,
+    "minimum_observations": 2,
+    "required_second_observation_trigger": "settled_viewpoint",
+    "maximum_horizontal_localization_error_m": 8.0
+  },
+  "acceptance": {
+    "stability_minimum_success_rate": 0.9,
+    "artifact_minimum_completeness_rate": 0.95,
+    "positions_minimum_success_rate": 0.75,
+    "positions_minimum_targets_with_success_rate": 0.75
+  },
+  "stability": {
+    "repetitions": 20,
+    "target": {
+      "target_id": "stability_reference",
+      "semantic_region": "SEM_PLAZA_NORTH",
+      "x": 85.0,
+      "y": 60.0,
+      "z": 0.4,
+      "yaw": 0.0
+    }
+  },
+  "positions": {
+    "repetitions_per_target": 3,
+    "targets": [
+      {"target_id": "plaza_north_center", "semantic_region": "SEM_PLAZA_NORTH", "x": 65.0, "y": 78.0, "z": 0.4, "yaw": 0.0},
+      {"target_id": "road_connector_north", "semantic_region": "SEM_ROAD_CONNECTOR_NORTH", "x": 115.0, "y": 65.0, "z": 0.4, "yaw": 0.0},
+      {"target_id": "road_connector_south", "semantic_region": "SEM_ROAD_CONNECTOR_SOUTH", "x": 180.0, "y": 65.0, "z": 0.4, "yaw": 0.0},
+      {"target_id": "street_edge_mid", "semantic_region": "SEM_STREET_EDGE_ROAD_SOUTH", "x": 315.0, "y": 100.0, "z": 0.4, "yaw": 0.0},
+      {"target_id": "woodland_edge_mid", "semantic_region": "SEM_WOODLAND_EDGE_ROAD_EAST", "x": 150.0, "y": 202.0, "z": 0.4, "yaw": 0.0},
+      {"target_id": "frontage_west_open", "semantic_region": "SEM_BUILDING_FRONTAGE_WEST", "x": 150.0, "y": 65.0, "z": 0.4, "yaw": 0.0},
+      {"target_id": "frontage_center_west", "semantic_region": "SEM_BUILDING_FRONTAGE_CENTER", "x": 120.0, "y": 110.0, "z": 0.4, "yaw": 0.0},
+      {"target_id": "passage_northwest", "semantic_region": "SEM_BUILDING_PASSAGE_NORTHWEST", "x": 97.0, "y": 30.0, "z": 0.4, "yaw": 0.0},
+      {"target_id": "passage_southeast", "semantic_region": "SEM_BUILDING_PASSAGE_SOUTHEAST", "x": 202.0, "y": 160.0, "z": 0.4, "yaw": 0.0},
+      {"target_id": "access_north", "semantic_region": "SEM_ACCESS_POINT_NORTH", "x": 20.0, "y": 102.0, "z": 0.4, "yaw": 0.0},
+      {"target_id": "access_south", "semantic_region": "SEM_ACCESS_POINT_SOUTH", "x": 280.0, "y": 100.0, "z": 0.4, "yaw": 0.0},
+      {"target_id": "bike_parking_center", "semantic_region": "SEM_BIKE_PARKING_WEST", "x": 150.0, "y": 0.0, "z": 0.4, "yaw": 0.0}
+    ]
+  },
+  "preflight": [
+    {"cohort": "stability", "target_id": "stability_reference", "repetition": 1},
+    {"cohort": "positions", "target_id": "plaza_north_center", "repetition": 1}
+  ]
+}

@@ -1,9 +1,12 @@
 import math
 import unittest
 
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import Pose, PoseStamped
 
-from gsi_search_bridge.mavros_offboard_controller import _advance_horizontal_setpoint
+from gsi_search_bridge.mavros_offboard_controller import (
+    _advance_horizontal_setpoint,
+    _limit_horizontal_setpoint_lead,
+)
 
 
 class HorizontalSetpointRampTests(unittest.TestCase):
@@ -35,6 +38,50 @@ class HorizontalSetpointRampTests(unittest.TestCase):
 
         self.assertEqual(current.pose.position.x, target.pose.position.x)
         self.assertEqual(current.pose.position.y, target.pose.position.y)
+
+    def test_limits_setpoint_distance_from_actual_vehicle(self):
+        current = PoseStamped()
+        current.pose.position.x = 5.0
+        target = PoseStamped()
+        target.pose.position.x = 10.0
+        actual = Pose()
+
+        _limit_horizontal_setpoint_lead(
+            current,
+            target,
+            actual,
+            maximum_lead_m=1.0,
+        )
+
+        self.assertAlmostEqual(current.pose.position.x, 1.0)
+        self.assertAlmostEqual(current.pose.position.y, 0.0)
+
+    def test_lead_limiter_snaps_to_goal_near_actual_vehicle(self):
+        current = PoseStamped()
+        current.pose.position.x = 4.0
+        target = PoseStamped()
+        target.pose.position.x = 0.5
+        target.pose.position.y = -0.25
+        actual = Pose()
+
+        _limit_horizontal_setpoint_lead(
+            current,
+            target,
+            actual,
+            maximum_lead_m=1.0,
+        )
+
+        self.assertEqual(current.pose.position.x, target.pose.position.x)
+        self.assertEqual(current.pose.position.y, target.pose.position.y)
+
+    def test_lead_limiter_rejects_nonpositive_limit(self):
+        with self.assertRaisesRegex(ValueError, "maximum_lead_m"):
+            _limit_horizontal_setpoint_lead(
+                PoseStamped(),
+                PoseStamped(),
+                Pose(),
+                maximum_lead_m=0.0,
+            )
 
 
 if __name__ == "__main__":

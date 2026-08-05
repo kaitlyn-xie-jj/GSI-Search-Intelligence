@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "scenario_id": "yungu2030_rgbd_px4",
+  "world_name": "yungu2030_local_origin",
+  "asset_package": "data/yungu2030_v1",
+  "world_file": "yungu_local_origin.sdf",
+  "semantic_map": "semantic_map.json",
+  "coordinate_frame": "ENU",
+  "units": "meters",
+  "sensor_profile": "x500_gsi_rgbd_nadir_longrange",
+  "search": {
+    "flight_altitude_m": 70.0,
+    "sensor_footprint_radius_m": 40.0,
+    "grid_resolution_m": 10.0,
+    "max_viewpoints": 60
+  },
+  "safety": {
+    "maximum_building_height_m": 55.1,
+    "minimum_vertical_clearance_m": 14.9,
+    "excluded_target_regions": ["sunken_plaza"]
+  },
+  "sensor_capture": {
+    "rgb_width_px": 640,
+    "rgb_height_px": 480,
+    "rgb_fps": 10.0,
+    "depth_maximum_range_m": 90.0
+  },
+  "ground_truth_policy": "Target poses are supplied at run time and written only to evaluator artifacts."
+}

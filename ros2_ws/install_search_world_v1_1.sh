@@ -49,7 +49,7 @@ MC_APPS_TEMP="$(mktemp)"
 awk '
     function print_attitude_block() {
         print "# BEGIN GSI SearchWorld V1.1 attitude controllers (managed)"
-        print "if param compare -s SYS_AUTOSTART 4010 || param compare -s SYS_AUTOSTART 4011"
+        print "if param compare -s SYS_AUTOSTART 4010 || param compare -s SYS_AUTOSTART 4011 || param compare -s SYS_AUTOSTART 4012"
         print "then"
         print "\tmc_rate_control start"
         print "\tmc_att_control start"
@@ -60,7 +60,7 @@ awk '
     }
     function print_position_block() {
         print "# BEGIN GSI SearchWorld V1.1 position controller (managed)"
-        print "if param compare -s SYS_AUTOSTART 4010 || param compare -s SYS_AUTOSTART 4011"
+        print "if param compare -s SYS_AUTOSTART 4010 || param compare -s SYS_AUTOSTART 4011 || param compare -s SYS_AUTOSTART 4012"
         print "then"
         print "\tmc_pos_control start"
         print "else"
