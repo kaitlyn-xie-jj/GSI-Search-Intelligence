@@ -13,6 +13,7 @@ TARGET_YAW_RAD="${GSI_TARGET_YAW_RAD:-0}"
 CAPTURE_DURATION_S="${GSI_CAPTURE_DURATION_S:-240}"
 STARTUP_TIMEOUT_S="${GSI_STARTUP_TIMEOUT_S:-300}"
 SEARCH_TIMEOUT_S="${GSI_SEARCH_TIMEOUT_S:-180}"
+SEARCH_TIME_BUDGET_S="${GSI_SEARCH_TIME_BUDGET_S:-$(python3 -c 'import sys; print(max(1.0, float(sys.argv[1]) - 5.0))' "${SEARCH_TIMEOUT_S}")}"
 GUI_CONFIG="${GSI_YUNGU_GUI_CONFIG:-}"
 PRE_SEARCH_DELAY_S="${GSI_PRE_SEARCH_DELAY_S:-0}"
 
@@ -99,7 +100,7 @@ fi
 set +e
 setsid timeout --foreground "${SEARCH_TIMEOUT_S}" \
     docker exec "${CONTAINER_NAME}" bash -lc \
-        "cd /tmp/GSI/ros2_ws && GSI_RUNTIME_LOG=/tmp/GSI/results/yungu2030_sensor_validation/runtime.log bash run_yungu2030_search.sh" \
+        "cd /tmp/GSI/ros2_ws && GSI_SEARCH_TIME_BUDGET_S='${SEARCH_TIME_BUDGET_S}' GSI_RUNTIME_LOG=/tmp/GSI/results/yungu2030_sensor_validation/runtime.log bash run_yungu2030_search.sh" \
     > "${OUTPUT_ROOT}/search_console.log" 2>&1 &
 SEARCH_PID=$!
 SEARCH_STATUS=""

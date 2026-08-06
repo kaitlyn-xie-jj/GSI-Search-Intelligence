@@ -89,6 +89,28 @@ class SearchSensorIntegrationTests(unittest.TestCase):
         ).adapt(frame, self.commanded)
 
         self.assertEqual(observation.visible_cell_ids, ("gazebo-area:r0:c0",))
+        self.assertEqual(observation.negative_update_strength, 0.0)
+        self.assertEqual(
+            observation.negative_update_rejection_reason,
+            "no_valid_point_projection",
+        )
+
+    def test_valid_projection_preserves_confidence_gated_negative_strength(self):
+        frame = SearchSensorFrame(
+            timestamp_s=4.0,
+            viewpoint=self.commanded,
+            visible_ground_points_xy=((10.0, 10.0),),
+            visibility_probability=0.7,
+            negative_update_strength=0.8,
+        )
+
+        observation = SearchObservationAdapter(self.grid).adapt(
+            frame,
+            self.commanded,
+        )
+
+        self.assertAlmostEqual(observation.negative_update_strength, 0.56)
+        self.assertIsNone(observation.negative_update_rejection_reason)
 
     def test_sensor_frame_rejects_invalid_quality(self):
         with self.assertRaises(ValueError):

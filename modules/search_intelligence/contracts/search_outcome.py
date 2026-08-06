@@ -88,6 +88,13 @@ class SearchOutcome:
             "cumulative_entropy_reduction_nats",
             "cumulative_kl_divergence_nats",
             "last_evidence_type",
+            "last_visibility_probability",
+            "last_effective_detection_probability",
+            "last_negative_update_strength",
+            "last_update_rejection_reason",
+            "replan_count",
+            "last_replan_reason",
+            "last_time_between_replans_s",
         ):
             if key in state.policy_metadata:
                 derived_metrics[key] = state.policy_metadata[key]

@@ -19,6 +19,7 @@ class SearchObservationAdapter:
     target_query: Optional[str] = None
     fallback_footprint_radius_m: Optional[float] = None
     maximum_sensor_skew_s: Optional[float] = 0.25
+    minimum_negative_observation_quality: float = 0.5
 
     def __post_init__(self) -> None:
         if (
@@ -28,13 +29,17 @@ class SearchObservationAdapter:
             raise ValueError("fallback_footprint_radius_m must not be negative")
         if self.maximum_sensor_skew_s is not None and self.maximum_sensor_skew_s <= 0:
             raise ValueError("maximum_sensor_skew_s must be positive")
+        if not 0 <= self.minimum_negative_observation_quality <= 1:
+            raise ValueError(
+                "minimum_negative_observation_quality must be within [0, 1]"
+            )
 
     def adapt(
         self,
         frame: SearchSensorFrame,
         commanded_viewpoint: Viewpoint,
     ) -> SearchObservation:
-        visible_cell_ids = self._visible_cell_ids(frame)
+        visible_cell_ids, used_fallback = self._visible_cell_ids(frame)
         quality = frame.observation_quality
         if self.maximum_sensor_skew_s is not None:
             skew_ratio = min(
@@ -51,6 +56,23 @@ class SearchObservationAdapter:
             frame.viewpoint.yaw,
             commanded_viewpoint.yaw,
         )
+        rejection_reason = frame.negative_update_rejection_reason
+        if rejection_reason is None:
+            if bool(frame.metadata.get("blocked_view", False)):
+                rejection_reason = "blocked_view"
+            elif frame.metadata.get("rgb_available") is False or frame.metadata.get(
+                "depth_available"
+            ) is False:
+                rejection_reason = "insufficient_rgbd_observation"
+            elif used_fallback:
+                rejection_reason = "no_valid_point_projection"
+            elif quality < self.minimum_negative_observation_quality:
+                rejection_reason = "insufficient_observation_quality"
+        negative_update_strength = (
+            0.0
+            if rejection_reason is not None
+            else frame.negative_update_strength * frame.visibility_probability
+        )
         metadata = {
             **dict(frame.metadata),
             "source": "robotics_sensor_frame",
@@ -61,6 +83,12 @@ class SearchObservationAdapter:
             "maximum_sensor_skew_s": frame.maximum_sensor_skew_s,
             "sensor_timestamps_s": dict(frame.sensor_timestamps_s),
             "frame_references": dict(frame.frame_references),
+            "visibility_probability": frame.visibility_probability,
+            "negative_update_strength": negative_update_strength,
+            "negative_update_rejection_reason": rejection_reason,
+            "visibility_source": (
+                "fallback_footprint" if used_fallback else "sensor_projection"
+            ),
         }
         return SearchObservation(
             viewpoint=frame.viewpoint,
@@ -74,13 +102,19 @@ class SearchObservationAdapter:
             ),
             visible_cell_ids=visible_cell_ids,
             observation_quality=quality,
+            visibility_probability=frame.visibility_probability,
+            negative_update_strength=negative_update_strength,
+            negative_update_rejection_reason=rejection_reason,
             travel_time_s=frame.travel_time_s,
             travel_distance_m=frame.travel_distance_m,
             energy_used=frame.energy_used,
             sensor_metadata=metadata,
         )
 
-    def _visible_cell_ids(self, frame: SearchSensorFrame) -> Tuple[str, ...]:
+    def _visible_cell_ids(
+        self,
+        frame: SearchSensorFrame,
+    ) -> Tuple[Tuple[str, ...], bool]:
         searchable_ids = {cell.cell_id for cell in self.grid.searchable_cells}
         visible = [
             cell_id for cell_id in frame.visible_cell_ids
@@ -90,7 +124,8 @@ class SearchObservationAdapter:
             cell = self.grid.cell_at(point[0], point[1])
             if cell is not None and cell.searchable:
                 visible.append(cell.cell_id)
-        if not visible and self.fallback_footprint_radius_m is not None:
+        used_fallback = not visible and self.fallback_footprint_radius_m is not None
+        if used_fallback:
             visible.extend(
                 cell.cell_id
                 for cell in self.grid.cells_within_radius(
@@ -99,7 +134,7 @@ class SearchObservationAdapter:
                     self.fallback_footprint_radius_m,
                 )
             )
-        return tuple(dict.fromkeys(visible))
+        return tuple(dict.fromkeys(visible)), used_fallback
 
 
 def _wrapped_angle_difference(first: float, second: float) -> float:

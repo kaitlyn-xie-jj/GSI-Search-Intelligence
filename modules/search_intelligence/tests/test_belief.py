@@ -110,6 +110,62 @@ class BayesianBeliefTests(unittest.TestCase):
         self.assertAlmostEqual(update.posterior.probabilities[self.cell_b], 0.5)
         self.assertAlmostEqual(update.entropy_reduction_nats, 0.0)
 
+    def test_rejected_negative_observation_does_not_change_belief(self):
+        update = self.updater.update(
+            self.prior,
+            self._observation(
+                visibility_probability=0.0,
+                negative_update_strength=0.0,
+                negative_update_rejection_reason="no_valid_point_projection",
+            ),
+            self.grid,
+        )
+
+        self.assertEqual(update.evidence_type, "negative_rejected")
+        self.assertEqual(update.posterior.probabilities, self.prior.probabilities)
+        self.assertEqual(update.negative_update_strength, 0.0)
+        self.assertEqual(update.rejection_reason, "no_valid_point_projection")
+        self.assertEqual(
+            update.to_policy_metadata()["last_update_rejection_reason"],
+            "no_valid_point_projection",
+        )
+
+    def test_frozen_legacy_updater_ignores_confidence_gate(self):
+        updater = BayesianBeliefUpdater(
+            BinarySensorModel(detection_probability=0.8, false_positive_probability=0.1),
+            confidence_gating_enabled=False,
+        )
+
+        update = updater.update(
+            self.prior,
+            self._observation(
+                visibility_probability=0.0,
+                negative_update_strength=0.0,
+                negative_update_rejection_reason="blocked_view",
+            ),
+            self.grid,
+        )
+
+        self.assertEqual(update.evidence_type, "negative")
+        self.assertLess(update.posterior.probabilities[self.cell_a], 0.5)
+        self.assertEqual(update.visibility_probability, 1.0)
+        self.assertEqual(update.negative_update_strength, 1.0)
+        self.assertIsNone(update.rejection_reason)
+
+    def test_visibility_scales_negative_evidence_strength(self):
+        full = self.updater.update(self.prior, self._observation(), self.grid)
+        partial = self.updater.update(
+            self.prior,
+            self._observation(visibility_probability=0.25),
+            self.grid,
+        )
+
+        self.assertLess(partial.posterior.probabilities[self.cell_a], 0.5)
+        self.assertGreater(
+            partial.posterior.probabilities[self.cell_a],
+            full.posterior.probabilities[self.cell_a],
+        )
+
     def test_detection_below_task_threshold_is_negative_evidence(self):
         detection = TargetDetection(label="yellow van", confidence=0.4)
 
@@ -190,6 +246,45 @@ class BayesianSearchSessionTests(unittest.TestCase):
             state.policy_metadata["cumulative_kl_divergence_nats"],
             0.0,
         )
+
+    def test_transit_negative_observation_updates_belief(self):
+        task = SearchTask.from_skill_params({
+            "task_id": "transit-belief-session",
+            "area_token": "Area-A",
+            "area": {
+                "kind": "rectangle",
+                "coords": [[0, 0], [40, 0], [40, 20], [0, 20]],
+            },
+            "target_token": "yellow-van",
+        })
+        grid = SearchGrid.from_task(task, resolution_m=20.0)
+        sensor = BinarySensorModel(0.8, 0.1)
+        session = SearchSession(
+            task,
+            CoveragePolicy(pass_spacing_m=20.0, altitude_m=30.0),
+            search_grid=grid,
+            belief_updater=BayesianBeliefUpdater(sensor),
+        )
+        commanded = session.next_viewpoint()
+        visible_cell = "Area-A:r0:c0"
+
+        state = session.record_transit_observation(SearchObservation(
+            viewpoint=Viewpoint(
+                commanded.x + 1.0,
+                commanded.y,
+                commanded.z,
+                commanded.yaw,
+                commanded.pitch,
+            ),
+            action_viewpoint_key=commanded.key,
+            timestamp_s=1.0,
+            visible_cell_ids=(visible_cell,),
+        ))
+
+        self.assertLess(state.belief[visible_cell], 0.5)
+        self.assertEqual(state.policy_metadata["last_evidence_type"], "negative")
+        self.assertEqual(state.policy_metadata["belief_update_count"], 1)
+        self.assertEqual(state.step_index, 0)
 
     def test_grid_and_updater_must_be_configured_together(self):
         task = SearchTask.from_skill_params({

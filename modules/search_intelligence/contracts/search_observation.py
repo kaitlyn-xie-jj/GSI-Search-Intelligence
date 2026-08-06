@@ -55,6 +55,9 @@ class SearchObservation:
     visible_cell_ids: Tuple[str, ...] = ()
     observed_area: Mapping[str, Any] = field(default_factory=dict)
     observation_quality: float = 1.0
+    visibility_probability: float = 1.0
+    negative_update_strength: float = 1.0
+    negative_update_rejection_reason: Optional[str] = None
     travel_time_s: float = 0.0
     travel_distance_m: float = 0.0
     energy_used: float = 0.0
@@ -66,8 +69,18 @@ class SearchObservation:
             raise ValueError("timestamp_s must not be negative")
         if self.action_viewpoint_key is not None and not self.action_viewpoint_key.strip():
             raise ValueError("action_viewpoint_key must not be empty")
-        if not 0.0 <= self.observation_quality <= 1.0:
-            raise ValueError("observation_quality must be within [0, 1]")
+        for name in (
+            "observation_quality",
+            "visibility_probability",
+            "negative_update_strength",
+        ):
+            if not 0.0 <= getattr(self, name) <= 1.0:
+                raise ValueError(f"{name} must be within [0, 1]")
+        if (
+            self.negative_update_rejection_reason is not None
+            and not self.negative_update_rejection_reason.strip()
+        ):
+            raise ValueError("negative_update_rejection_reason must not be empty")
         for name in ("travel_time_s", "travel_distance_m", "energy_used"):
             if getattr(self, name) < 0:
                 raise ValueError(f"{name} must not be negative")

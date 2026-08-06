@@ -4,19 +4,24 @@ from __future__ import annotations
 
 import hashlib
 import math
-from typing import Any, Dict, Iterable, Mapping, Optional, Tuple
+from dataclasses import replace
+from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Tuple
 
 from ..belief import BayesianBeliefUpdater, BeliefMap
 from ..contracts import SearchObservation, TargetDetection, Viewpoint
 from ..execution import SearchSession
 from ..policies import (
+    AdaptiveBeliefLookaheadPolicy,
     AdaptiveActiveSearchPolicy,
     ActiveSearchPolicy,
     BeliefLookaheadPolicy,
     CoveragePolicy,
     GreedyPriorPolicy,
+    HybridSearchSupervisorPolicy,
+    OriginalActiveSearchPolicy,
     RandomPolicy,
     SearchPolicy,
+    SuccessConstrainedSupervisorPolicy,
 )
 from ..search_space import CandidateViewpointGenerator, ViewpointCandidate
 from .contracts import (
@@ -61,7 +66,16 @@ class SearchEpisodeRunner:
                 "prior_confidence": scenario.metadata.get("prior_confidence", 0.5),
             },
             search_grid=scenario.grid,
-            belief_updater=BayesianBeliefUpdater(self.config.sensor_model),
+            belief_updater=BayesianBeliefUpdater(
+                self.config.sensor_model,
+                confidence_gating_enabled=(
+                    policy_name in {
+                        "improved_active",
+                        "hybrid_supervisor",
+                        "success_constrained",
+                    }
+                ),
+            ),
         )
         entropy_trace = [initial.entropy_nats]
         sensor_trace = []
@@ -83,6 +97,17 @@ class SearchEpisodeRunner:
                 self.config.footprint_radius_m,
             )
             visible_ids = tuple(cell.cell_id for cell in visible_cells)
+            visibility_probability = _scenario_visibility_probability(scenario)
+            view_is_visible = _stable_unit_interval(
+                seed,
+                scenario.scenario_id,
+                viewpoint.key,
+                "visibility",
+            ) < visibility_probability
+            observation_quality = _scenario_observation_quality(
+                scenario,
+                self.config.observation_quality,
+            )
             detections = self._detections(
                 scenario,
                 viewpoint,
@@ -93,6 +118,9 @@ class SearchEpisodeRunner:
                 "viewpoint_key": viewpoint.key,
                 "visible_cell_ids": visible_ids,
                 "detections": tuple(_detection_trace(item) for item in detections),
+                "visibility_probability": visibility_probability,
+                "view_is_visible": view_is_visible,
+                "observation_quality": observation_quality,
             })
             timestamp = session.state.elapsed_time_s + elapsed
             session.record_observation(SearchObservation(
@@ -100,7 +128,14 @@ class SearchEpisodeRunner:
                 timestamp_s=timestamp,
                 detections=detections,
                 visible_cell_ids=visible_ids,
-                observation_quality=self.config.observation_quality,
+                observation_quality=observation_quality,
+                visibility_probability=(
+                    visibility_probability if view_is_visible else 0.0
+                ),
+                negative_update_strength=(1.0 if view_is_visible else 0.0),
+                negative_update_rejection_reason=(
+                    None if view_is_visible else "blocked_view"
+                ),
                 travel_time_s=elapsed,
                 travel_distance_m=distance,
                 energy_used=energy,
@@ -109,10 +144,12 @@ class SearchEpisodeRunner:
                     "scenario_id": scenario.scenario_id,
                     "repetition": repetition,
                     "footprint_radius_m": self.config.footprint_radius_m,
-                    "observation_quality": self.config.observation_quality,
+                    "observation_quality": observation_quality,
+                    "visibility_probability": visibility_probability,
+                    "view_is_visible": view_is_visible,
                     "effective_detection_probability": (
                         self.config.sensor_model.effective_detection_probability(
-                            self.config.observation_quality
+                            observation_quality * visibility_probability
                         )
                     ),
                     "persistent_distractor_probability": (
@@ -173,6 +210,17 @@ class SearchEpisodeRunner:
             for detection in all_detections
             if "localization_error_m" in detection.attributes
         )
+        belief_brier_score = _belief_brier_score(
+            session.state.belief,
+            scenario.target_cell_id,
+        )
+        failure_category = _failure_category(
+            target_found=target_found,
+            false_positive=declared_found and not target_found,
+            terminal_status=outcome.status.value,
+            target_cell_id=scenario.target_cell_id,
+            sensor_trace=sensor_trace,
+        )
         return SearchEpisodeResult(
             scenario_id=scenario.scenario_id,
             prior_condition=scenario.prior_condition,
@@ -202,6 +250,9 @@ class SearchEpisodeRunner:
                 sum(localization_errors) / len(localization_errors)
                 if localization_errors else 0.0
             ),
+            replan_count=max(0, len(session.policy_decisions) - 1),
+            belief_brier_score=belief_brier_score,
+            failure_category=failure_category,
             policy_trace=session.policy_decisions,
             belief_entropy_trace=tuple(entropy_trace),
             sensor_trace=tuple(sensor_trace),
@@ -244,7 +295,7 @@ class SearchEpisodeRunner:
             policy_type = (
                 AdaptiveActiveSearchPolicy
                 if policy_name == "adaptive_active"
-                else ActiveSearchPolicy
+                else OriginalActiveSearchPolicy
             )
             return policy_type(
                 candidates,
@@ -272,6 +323,85 @@ class SearchEpisodeRunner:
                 verification_followup_limit=self.config.verification_followup_limit,
                 discount_factor=self.config.lookahead_discount_factor,
             )
+        if policy_name == "improved_active":
+            visibility = _scenario_visibility_probability(scenario)
+            region_by_cell = dict(scenario.metadata.get("semantic_region_by_cell", {}))
+            risk_score = float(scenario.metadata.get("risk_score", 0.0))
+            return AdaptiveBeliefLookaheadPolicy(
+                candidates,
+                sensor_model=self.config.sensor_model,
+                observation_quality=_scenario_observation_quality(
+                    scenario,
+                    self.config.observation_quality,
+                ),
+                visibility_probabilities={
+                    candidate.candidate_id: visibility
+                    for candidate in candidates
+                },
+                detection_weight=self.config.detection_weight,
+                information_gain_weight=self.config.information_gain_weight,
+                novelty_weight=self.config.novelty_weight,
+                travel_weight=self.config.travel_weight,
+                revisit_weight=self.config.revisit_weight,
+                risk_weight=self.config.risk_weight,
+                candidate_risk_scores={
+                    candidate.candidate_id: risk_score
+                    for candidate in candidates
+                },
+                distance_scale_m=distance_scale_m,
+                verification_followup_limit=self.config.verification_followup_limit,
+                planning_speed_mps=self.config.speed_mps,
+                completion_time_reserve_s=self.config.completion_time_reserve_s,
+                discount_factor=self.config.lookahead_discount_factor,
+                lookahead_candidate_limit=self.config.lookahead_candidate_limit,
+                exploitation_fraction=self.config.exploitation_fraction,
+                exploration_fraction=self.config.exploration_fraction,
+                semantic_fraction=self.config.semantic_fraction,
+                frontier_fraction_within_exploration=(
+                    self.config.frontier_fraction_within_exploration
+                ),
+                semantic_regions={
+                    candidate.candidate_id: (
+                        str(region_by_cell.get(
+                            candidate.anchor_cell_id,
+                            scenario.metadata.get("environment", "unclassified"),
+                        )),
+                    )
+                    for candidate in candidates
+                },
+            )
+        if policy_name == "hybrid_supervisor":
+            return HybridSearchSupervisorPolicy(
+                improved_policy=self._policy(
+                    "improved_active", scenario, candidates, seed
+                ),
+                coverage_policy=self._policy(
+                    "coverage", scenario, candidates, seed
+                ),
+                random_policy=self._policy(
+                    "random", scenario, candidates, seed
+                ),
+                visibility_fallback_policy=self._policy(
+                    "active", scenario, candidates, seed
+                ),
+            )
+        if policy_name == "success_constrained":
+            default_policy = self._policy(
+                "improved_active", scenario, candidates, seed
+            )
+            return SuccessConstrainedSupervisorPolicy(
+                default_policy=default_policy,
+                recovery_policy=replace(
+                    default_policy,
+                    detection_weight=0.8,
+                    information_gain_weight=0.4,
+                    novelty_weight=1.0,
+                    travel_weight=0.05,
+                    exploitation_fraction=0.2,
+                    exploration_fraction=0.6,
+                    semantic_fraction=0.2,
+                ),
+            )
         raise ValueError(f"unsupported benchmark policy: {policy_name}")
 
     def _detections(
@@ -282,11 +412,20 @@ class SearchEpisodeRunner:
         seed: int,
     ) -> Tuple[TargetDetection, ...]:
         visible_ids = set(visible_cell_ids)
-        target_visible = scenario.target_cell_id in visible_ids
+        target_in_footprint = scenario.target_cell_id in visible_ids
+        target_visible = target_in_footprint and _stable_unit_interval(
+            seed,
+            scenario.scenario_id,
+            viewpoint.key,
+            "visibility",
+        ) < _scenario_visibility_probability(scenario)
         detections = []
         if target_visible:
             probability = self.config.sensor_model.effective_detection_probability(
-                self.config.observation_quality
+                _scenario_observation_quality(
+                    scenario,
+                    self.config.observation_quality,
+                )
             )
             if _stable_unit_interval(
                 seed,
@@ -530,3 +669,61 @@ def _detection_trace(detection: TargetDetection) -> Mapping[str, Any]:
         "estimated_position": detection.estimated_position,
         "attributes": dict(detection.attributes),
     }
+
+
+def _scenario_visibility_probability(
+    scenario: SearchBenchmarkScenario,
+) -> float:
+    return max(
+        0.0,
+        min(1.0, float(scenario.metadata.get("visibility_probability", 1.0))),
+    )
+
+
+def _scenario_observation_quality(
+    scenario: SearchBenchmarkScenario,
+    base_quality: float,
+) -> float:
+    return max(0.0, min(
+        1.0,
+        base_quality * float(scenario.metadata.get("sensor_quality", 1.0)),
+    ))
+
+
+def _belief_brier_score(
+    belief: Mapping[str, float],
+    target_cell_id: str,
+) -> float:
+    if not belief:
+        return 0.0
+    return sum(
+        (probability - float(cell_id == target_cell_id)) ** 2
+        for cell_id, probability in belief.items()
+    ) / len(belief)
+
+
+def _failure_category(
+    *,
+    target_found: bool,
+    false_positive: bool,
+    terminal_status: str,
+    target_cell_id: str,
+    sensor_trace: Sequence[Mapping[str, Any]],
+) -> str:
+    if target_found:
+        return "none"
+    if false_positive:
+        return "false_positive"
+    target_footprints = tuple(
+        item for item in sensor_trace
+        if target_cell_id in item.get("visible_cell_ids", ())
+    )
+    if target_footprints and not any(
+        bool(item.get("view_is_visible")) for item in target_footprints
+    ):
+        return "occluded"
+    if target_footprints:
+        return "sensor_miss"
+    if terminal_status == "budget_exhausted":
+        return "budget_exhausted_before_target_region"
+    return "target_region_unsearched"

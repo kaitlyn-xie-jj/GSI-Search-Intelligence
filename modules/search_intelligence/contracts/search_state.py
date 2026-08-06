@@ -102,6 +102,39 @@ class SearchState:
             policy_metadata=metadata,
         )
 
+    def observe_in_transit(
+        self,
+        observation: SearchObservation,
+        *,
+        belief: Optional[Mapping[str, float]] = None,
+        policy_metadata: Optional[Mapping[str, Any]] = None,
+    ) -> "SearchState":
+        """Apply en-route evidence without marking the destination visited."""
+        coverage = dict(self.observed_cell_quality)
+        for cell_id in observation.visible_cell_ids:
+            coverage[cell_id] = max(
+                coverage.get(cell_id, 0.0),
+                observation.observation_quality,
+            )
+
+        metadata = dict(self.policy_metadata)
+        if policy_metadata:
+            metadata.update(policy_metadata)
+
+        return replace(
+            self,
+            belief=dict(self.belief if belief is None else belief),
+            current_viewpoint=observation.viewpoint,
+            observations=self.observations + (observation,),
+            observed_cell_quality=coverage,
+            elapsed_time_s=self.elapsed_time_s + observation.travel_time_s,
+            distance_travelled_m=(
+                self.distance_travelled_m + observation.travel_distance_m
+            ),
+            energy_used=self.energy_used + observation.energy_used,
+            policy_metadata=metadata,
+        )
+
     @property
     def exhausted_budget(self) -> Optional[str]:
         """Return the first exhausted budget name, or ``None``."""

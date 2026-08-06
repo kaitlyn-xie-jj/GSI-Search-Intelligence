@@ -171,6 +171,9 @@ class BeliefUpdate:
     entropy_reduction_nats: float
     kl_divergence_nats: float
     effective_detection_probability: float
+    visibility_probability: float = 1.0
+    negative_update_strength: float = 1.0
+    rejection_reason: Optional[str] = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "visible_cell_ids", tuple(self.visible_cell_ids))
@@ -187,6 +190,12 @@ class BeliefUpdate:
             "last_evidence_type": self.evidence_type,
             "last_entropy_reduction_nats": self.entropy_reduction_nats,
             "last_kl_divergence_nats": self.kl_divergence_nats,
+            "last_visibility_probability": self.visibility_probability,
+            "last_effective_detection_probability": (
+                self.effective_detection_probability
+            ),
+            "last_negative_update_strength": self.negative_update_strength,
+            "last_update_rejection_reason": self.rejection_reason,
         }
 
     def to_dict(self) -> Dict[str, Any]:
@@ -198,6 +207,7 @@ class BayesianBeliefUpdater:
     """Apply positive or negative target-conditioned evidence to a BeliefMap."""
 
     sensor_model: BinarySensorModel = field(default_factory=BinarySensorModel)
+    confidence_gating_enabled: bool = True
 
     def update(
         self,
@@ -213,6 +223,14 @@ class BayesianBeliefUpdater:
         if max_localization_error_m is not None and max_localization_error_m < 0:
             raise ValueError("max_localization_error_m must be non-negative")
         if not prior.probabilities:
+            applied_visibility = (
+                observation.visibility_probability
+                if self.confidence_gating_enabled else 1.0
+            )
+            applied_negative_strength = (
+                observation.negative_update_strength
+                if self.confidence_gating_enabled else 1.0
+            )
             return BeliefUpdate(
                 posterior=BeliefMap({}, update_index=prior.update_index + 1),
                 evidence_type="empty_search_space",
@@ -225,6 +243,12 @@ class BayesianBeliefUpdater:
                 kl_divergence_nats=0.0,
                 effective_detection_probability=self.sensor_model.effective_detection_probability(
                     observation.observation_quality
+                ),
+                visibility_probability=applied_visibility,
+                negative_update_strength=applied_negative_strength,
+                rejection_reason=(
+                    observation.negative_update_rejection_reason
+                    if self.confidence_gating_enabled else None
                 ),
             )
 
@@ -256,6 +280,7 @@ class BayesianBeliefUpdater:
             evidence_type = "positive_localized" if localized_ids else "positive_unlocalized"
             evidence_ids = localized_ids or visible_ids
             confidence = max(detection.confidence for detection in detections)
+            # A positive detection is direct evidence that the target was visible.
             quality = observation.observation_quality * confidence
             effective_detection = self.sensor_model.effective_detection_probability(quality)
             likelihoods = {
@@ -267,10 +292,24 @@ class BayesianBeliefUpdater:
                 for cell_id in grid_aligned.probabilities
             }
         else:
-            evidence_type = "negative"
+            rejection_reason = (
+                observation.negative_update_rejection_reason
+                if self.confidence_gating_enabled else None
+            )
+            negative_strength = (
+                observation.negative_update_strength
+                if self.confidence_gating_enabled else 1.0
+            )
+            visibility_probability = (
+                observation.visibility_probability
+                if self.confidence_gating_enabled else 1.0
+            )
+            evidence_type = "negative" if negative_strength > 0 else "negative_rejected"
             evidence_ids = visible_ids
             effective_detection = self.sensor_model.effective_detection_probability(
                 observation.observation_quality
+                * visibility_probability
+                * negative_strength
             )
             likelihoods = {
                 cell_id: (
@@ -295,6 +334,9 @@ class BayesianBeliefUpdater:
             metadata={
                 **dict(prior.metadata),
                 "last_evidence_type": evidence_type,
+                "last_update_rejection_reason": (
+                    rejection_reason if not detections else None
+                ),
             },
         )
         prior_entropy = grid_aligned.entropy_nats
@@ -310,6 +352,21 @@ class BayesianBeliefUpdater:
             entropy_reduction_nats=prior_entropy - posterior_entropy,
             kl_divergence_nats=self._kl_divergence(posterior, grid_aligned),
             effective_detection_probability=effective_detection,
+            visibility_probability=(
+                observation.visibility_probability
+                if detections or self.confidence_gating_enabled else 1.0
+            ),
+            negative_update_strength=(
+                (
+                    observation.negative_update_strength
+                    if self.confidence_gating_enabled else 1.0
+                )
+                if not detections else 0.0
+            ),
+            rejection_reason=(
+                observation.negative_update_rejection_reason
+                if not detections and self.confidence_gating_enabled else None
+            ),
         )
 
     @staticmethod

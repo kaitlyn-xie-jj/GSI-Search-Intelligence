@@ -11,6 +11,7 @@ gsi_search_node:
     flight_altitude_m: 70.0
     sensor_footprint_radius_m: 40.0
     max_viewpoints: 60
+    search_time_budget_s: 595.0
     min_confirmations: 2
     max_localization_error_m: 8.0
     verification_followup_limit: 0
@@ -18,6 +19,21 @@ gsi_search_node:
     search_prior_path: simulation/yungu2030_v1/yungu_search_prior.json
     sensor_detection_probability: 0.85
     sensor_false_positive_probability: 0.01
+    active_detection_weight: 1.0
+    active_information_gain_weight: 1.0
+    active_novelty_weight: 0.35
+    active_travel_weight: 0.1
+    active_revisit_weight: 0.2
+    active_risk_weight: 0.25
+    active_belief_lookahead_enabled: true
+    active_lookahead_discount_factor: 0.7
+    active_lookahead_candidate_limit: 16
+    active_candidate_exploitation_fraction: 0.3
+    active_candidate_exploration_fraction: 0.4
+    active_candidate_semantic_fraction: 0.3
+    active_candidate_frontier_fraction: 0.5
+    active_planning_speed_mps: 1.0
+    active_completion_time_reserve_s: 5.0
     # Half a grid cell is sufficient for a 40 m nadir footprint and avoids
     # treating PX4's slow final position convergence as a failed viewpoint.
     position_tolerance_m: 5.0
@@ -30,11 +46,21 @@ gsi_search_node:
     sensor_timeout_s: 3.0
     maximum_sensor_skew_s: 3.0
     minimum_observation_quality: 0.5
+    minimum_negative_observation_quality: 0.5
+    minimum_projected_ground_points: 10
     require_detections: true
     require_point_cloud: true
     record_first_positive_detection_in_transit: true
     transit_detection_max_sensor_skew_s: 1.0
     transit_detection_min_observation_quality: 0.5
+    record_negative_observations_in_transit: true
+    transit_negative_min_interval_s: 10.0
+    transit_negative_min_distance_m: 20.0
+    transit_negative_min_new_cells: 3
+    replan_min_interval_s: 20.0
+    replan_belief_total_variation_threshold: 0.1
+    replan_kl_divergence_threshold_nats: 0.05
+    replan_expected_reward_change_threshold: 0.2
     detections_in_map_frame: true
     map_origin_x_m: 42.0
     map_origin_y_m: 90.0

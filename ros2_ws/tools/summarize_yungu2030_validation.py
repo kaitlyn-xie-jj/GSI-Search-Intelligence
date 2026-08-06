@@ -272,6 +272,24 @@ def _read_exit_status(path: Path) -> int | None:
         return None
 
 
+def _resolve_trial_manifest(trial_root: Path, recorded_path: str) -> Path:
+    """Resolve metadata paths after artifacts move between WSL and Windows."""
+    recorded = Path(recorded_path)
+    if recorded.is_file():
+        return recorded
+    batch_local = trial_root.parents[1] / recorded.name
+    if batch_local.is_file():
+        return batch_local
+    raise FileNotFoundError(recorded_path)
+
+
+def _confirmation_observations(
+    observations: Sequence[Mapping[str, Any]],
+) -> list[Mapping[str, Any]]:
+    """Return observations that contributed positive target evidence."""
+    return [item for item in observations if item.get("detections")]
+
+
 def classify_trial(
     *,
     outcome: Mapping[str, Any],
@@ -317,7 +335,10 @@ def classify_trial(
 def summarize_trial(trial_dir: Path | str) -> dict[str, Any]:
     root = Path(trial_dir).resolve()
     metadata = _read_json(root / "trial_metadata.json")
-    manifest = _read_json(Path(metadata["manifest_path"]))
+    manifest = _read_json(_resolve_trial_manifest(
+        root,
+        str(metadata["manifest_path"]),
+    ))
     config = manifest["configuration"]
     events, trace_error = _load_trace(root / "search_trace.jsonl")
     outcomes = [event.get("outcome") for event in events if event.get("event") == "outcome"]
@@ -331,6 +352,15 @@ def summarize_trial(trial_dir: Path | str) -> dict[str, Any]:
     triggers = [
         (item.get("sensor_metadata") or {}).get("observation_trigger")
         for item in observations
+    ]
+    confirmations = _confirmation_observations(observations)
+    confirmation_qualities = [
+        float(item.get("observation_quality", 0.0))
+        for item in confirmations
+    ]
+    confirmation_triggers = [
+        (item.get("sensor_metadata") or {}).get("observation_trigger")
+        for item in confirmations
     ]
     estimate = outcome.get("estimated_target_position")
     target = metadata["target"]
@@ -346,8 +376,8 @@ def summarize_trial(trial_dir: Path | str) -> dict[str, Any]:
     search_exit_status = _read_exit_status(root / "search_exit_status.txt")
     success, failure_category = classify_trial(
         outcome=outcome,
-        observation_qualities=qualities,
-        observation_triggers=triggers,
+        observation_qualities=confirmation_qualities,
+        observation_triggers=confirmation_triggers,
         localization_error_m=localization_error,
         artifact_complete=artifact_complete,
         trace_error=trace_error,
@@ -372,6 +402,9 @@ def summarize_trial(trial_dir: Path | str) -> dict[str, Any]:
         "observation_count": len(observations),
         "observation_triggers": triggers,
         "observation_qualities": qualities,
+        "confirmation_observation_count": len(confirmations),
+        "confirmation_observation_triggers": confirmation_triggers,
+        "confirmation_observation_qualities": confirmation_qualities,
         "confidence": outcome.get("confidence"),
         "estimated_target_position": estimate,
         "localization_error_m": localization_error,

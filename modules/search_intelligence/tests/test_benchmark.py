@@ -5,6 +5,8 @@ from pathlib import Path
 
 from modules.search_intelligence import (
     BinarySensorModel,
+    AdaptiveBeliefLookaheadPolicy,
+    OriginalActiveSearchPolicy,
     SearchBenchmarkConfig,
     SearchBenchmarkRunner,
     SearchEpisodeRunner,
@@ -12,6 +14,8 @@ from modules.search_intelligence import (
     default_benchmark_scenarios,
     stress_benchmark_scenarios,
     write_benchmark_report,
+    run_unified_benchmark,
+    search_skill_scenario_matrix,
 )
 from modules.search_intelligence.evaluation import (
     SearchBenchmarkScenario,
@@ -75,6 +79,66 @@ class SearchBenchmarkContractTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             SearchBenchmarkConfig(distance_scale_mode="unknown")
 
+    def test_default_policy_set_is_unchanged_by_hybrid_experiment(self):
+        self.assertEqual(
+            SearchBenchmarkConfig().policy_names,
+            (
+                "coverage",
+                "random",
+                "greedy_prior",
+                "active",
+                "adaptive_active",
+                "lookahead_active",
+            ),
+        )
+
+    def test_search_skill_matrix_covers_all_required_conditions(self):
+        scenarios = search_skill_scenario_matrix()
+
+        self.assertEqual(len(scenarios), 24)
+        self.assertEqual(
+            {item.metadata["environment"] for item in scenarios},
+            {"open_area", "street_edge", "woodland", "building_passage"},
+        )
+        self.assertEqual(
+            {item.prior_condition for item in scenarios},
+            {"correct", "wrong", "uniform"},
+        )
+        self.assertEqual(
+            {item.metadata["sensor_condition"] for item in scenarios},
+            {"normal", "reduced_quality"},
+        )
+
+    def test_unified_report_contains_required_acceptance_metrics(self):
+        payload = run_unified_benchmark(repetitions=1)
+
+        self.assertEqual(payload["configuration"]["episode_count"], 96)
+        self.assertEqual(
+            set(payload["policy_results"]),
+            {"coverage", "random", "active", "improved_active"},
+        )
+        improved = payload["policy_results"]["improved_active"]
+        self.assertIn("success_rate", improved)
+        self.assertIn("mean_detection_distance_m", improved)
+        self.assertIn("mean_detection_time_s", improved)
+        self.assertIn("success_per_km", improved)
+        self.assertIn("replans", improved)
+        self.assertIn("belief_calibration_brier", improved)
+        self.assertIn("worst_case_scenario_success_rate", improved)
+        self.assertEqual(
+            payload["method_isolation"]["active"],
+            {
+                "implementation": "OriginalActiveSearchPolicy",
+                "confidence_gating_enabled": False,
+            },
+        )
+        self.assertTrue(
+            payload["method_isolation"]["improved_active"][
+                "confidence_gating_enabled"
+            ]
+        )
+        self.assertIn("comparison_against_original_active", payload)
+
 
 class SearchBenchmarkRunnerTests(unittest.TestCase):
     def setUp(self):
@@ -95,6 +159,21 @@ class SearchBenchmarkRunnerTests(unittest.TestCase):
         self.assertTrue(first.target_found)
         self.assertFalse(first.false_positive)
         self.assertEqual(len(first.belief_entropy_trace), first.steps + 1)
+
+    def test_unified_baseline_c_and_improved_d_use_isolated_implementations(self):
+        runner = SearchEpisodeRunner(self.config)
+        candidates = runner._candidates(self.scenario)
+
+        baseline = runner._policy("active", self.scenario, candidates, seed=1)
+        improved = runner._policy(
+            "improved_active",
+            self.scenario,
+            candidates,
+            seed=1,
+        )
+
+        self.assertIsInstance(baseline, OriginalActiveSearchPolicy)
+        self.assertIsInstance(improved, AdaptiveBeliefLookaheadPolicy)
 
     def test_adaptive_episode_is_reproducible_and_logs_weights(self):
         runner = SearchEpisodeRunner(self.config)

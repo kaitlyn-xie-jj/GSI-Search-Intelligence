@@ -1,12 +1,15 @@
 import unittest
+from dataclasses import replace
 
 from modules.search_intelligence import (
     AdaptiveActiveSearchPolicy,
+    AdaptiveBeliefLookaheadPolicy,
     ActiveSearchPolicy,
     BeliefLookaheadPolicy,
     BayesianBeliefUpdater,
     BinarySensorModel,
     GreedyPriorPolicy,
+    OriginalActiveSearchPolicy,
     RandomPolicy,
     SearchGrid,
     SearchObservation,
@@ -66,6 +69,78 @@ class CandidatePolicyTests(unittest.TestCase):
         self.assertAlmostEqual(scores[0].belief_mass_visible, 0.6)
         self.assertAlmostEqual(scores[0].detection_probability, 0.58)
         self.assertEqual(policy.select_next(self._state()), self.candidates[0].viewpoint)
+
+    def test_found_probability_separates_target_visibility_and_sensor_terms(self):
+        policy = ActiveSearchPolicy(
+            self.candidates,
+            sensor_model=BinarySensorModel(0.9, 0.1),
+            visibility_probabilities={"candidate-0": 0.5},
+            detection_weight=1.0,
+            information_gain_weight=0.0,
+            novelty_weight=0.0,
+            travel_weight=0.0,
+        )
+
+        score = next(
+            item for item in policy.score_candidates(self._state())
+            if item.candidate_id == "candidate-0"
+        )
+
+        self.assertEqual(score.target_probability, 0.6)
+        self.assertEqual(score.visibility_probability, 0.5)
+        self.assertEqual(score.sensor_detection_probability, 0.9)
+        self.assertAlmostEqual(score.found_probability, 0.27)
+        self.assertAlmostEqual(score.utility, 0.27)
+
+    def test_frozen_original_active_uses_positive_observation_utility(self):
+        policy = OriginalActiveSearchPolicy(
+            self.candidates,
+            sensor_model=BinarySensorModel(0.9, 0.1),
+            detection_weight=1.0,
+            information_gain_weight=0.0,
+            novelty_weight=0.0,
+            travel_weight=0.0,
+        )
+
+        score = policy.score_candidates(self._state())[0]
+
+        self.assertAlmostEqual(score.detection_probability, 0.58)
+        self.assertAlmostEqual(score.detection_contribution, 0.58)
+        self.assertAlmostEqual(score.utility, 0.58)
+
+    def test_reward_explanation_includes_all_weighted_contributions(self):
+        state = replace(
+            self._state(),
+            observed_cell_quality={self.cell_ids[0]: 1.0},
+        )
+        policy = ActiveSearchPolicy(
+            (self.candidates[0],),
+            revisit_weight=0.2,
+            risk_weight=0.5,
+            candidate_risk_scores={"candidate-0": 0.8},
+        )
+
+        score = policy.score_candidates(state)[0]
+
+        self.assertEqual(score.revisit_score, 1.0)
+        self.assertEqual(score.risk_score, 0.8)
+        self.assertAlmostEqual(score.revisit_cost_contribution, -0.2)
+        self.assertAlmostEqual(score.risk_cost_contribution, -0.4)
+        self.assertAlmostEqual(score.utility, sum((
+            score.detection_contribution,
+            score.information_gain_contribution,
+            score.exploration_contribution,
+            score.flight_cost_contribution,
+            score.revisit_cost_contribution,
+            score.risk_cost_contribution,
+        )))
+        explanation = policy.decision_metadata(
+            state,
+            self.candidates[0].viewpoint,
+        )["selected_viewpoint_score"]
+        self.assertIn("detection_contribution", explanation)
+        self.assertIn("exploration_contribution", explanation)
+        self.assertIn("flight_cost_contribution", explanation)
 
     def test_information_gain_prefers_viewpoint_that_splits_belief(self):
         state = self._state({
@@ -278,6 +353,105 @@ class CandidatePolicyTests(unittest.TestCase):
             metadata["adaptive_weight_state"]["adaptive_weights"],
             weights,
         )
+
+    def test_elapsed_time_drives_adaptive_budget_progress(self):
+        task = SearchTask.from_skill_params({
+            "task_id": "time-budget",
+            "area_token": "Area-A",
+            "area": {
+                "kind": "rectangle",
+                "coords": [[0, 0], [60, 0], [60, 20], [0, 20]],
+            },
+            "target_token": "yellow-van",
+            "time_budget_s": 100.0,
+            "max_viewpoints": 20,
+        })
+        state = SearchState(
+            task=task,
+            belief=dict(zip(self.cell_ids, (0.6, 0.3, 0.1))),
+            elapsed_time_s=75.0,
+        )
+
+        weights = AdaptiveActiveSearchPolicy(
+            self.candidates,
+        ).adaptive_weight_state(state)
+
+        self.assertEqual(weights.budget_progress, 0.75)
+
+    def test_time_budget_filters_unreachable_candidates(self):
+        task = SearchTask.from_skill_params({
+            "task_id": "time-feasibility",
+            "area_token": "Area-A",
+            "area": {
+                "kind": "rectangle",
+                "coords": [[0, 0], [60, 0], [60, 20], [0, 20]],
+            },
+            "target_token": "yellow-van",
+            "time_budget_s": 100.0,
+        })
+        near = ViewpointCandidate(
+            "near",
+            Viewpoint(10.0, 0.0, 30.0, 0.0),
+            self.cell_ids[0],
+            (self.cell_ids[0],),
+        )
+        far = ViewpointCandidate(
+            "far",
+            Viewpoint(40.0, 0.0, 30.0, 0.0),
+            self.cell_ids[1],
+            (self.cell_ids[1],),
+        )
+        state = SearchState(
+            task=task,
+            belief=dict(zip(self.cell_ids, (0.1, 0.8, 0.1))),
+            current_viewpoint=Viewpoint(0.0, 0.0, 30.0, 0.0),
+            elapsed_time_s=80.0,
+        )
+        policy = ActiveSearchPolicy(
+            (far, near),
+            planning_speed_mps=1.0,
+            completion_time_reserve_s=5.0,
+        )
+
+        self.assertEqual(
+            [score.candidate_id for score in policy.score_candidates(state)],
+            ["near"],
+        )
+
+    def test_adaptive_lookahead_uses_bounded_diverse_candidate_pool(self):
+        state = self._state()
+        immediate = AdaptiveActiveSearchPolicy(
+            self.candidates,
+        ).score_candidates(state)
+        lookahead = AdaptiveBeliefLookaheadPolicy(
+            self.candidates,
+            discount_factor=0.0,
+            lookahead_candidate_limit=2,
+        ).score_candidates(state)
+
+        self.assertEqual(len(lookahead), 2)
+        selected = {score.candidate_id for score in lookahead}
+        self.assertIn(immediate[0].candidate_id, selected)
+        self.assertIn("candidate-2", selected)
+        self.assertTrue(all(len(score.branches) == 2 for score in lookahead))
+        self.assertTrue(all(score.candidate_pool_sources for score in lookahead))
+
+    def test_candidate_pool_includes_semantic_representative(self):
+        state = self._state()
+        policy = AdaptiveBeliefLookaheadPolicy(
+            self.candidates,
+            discount_factor=0.0,
+            lookahead_candidate_limit=3,
+            exploitation_fraction=1 / 3,
+            exploration_fraction=1 / 3,
+            semantic_fraction=1 / 3,
+            semantic_regions={"candidate-1": ("street",)},
+        )
+
+        scores = policy.score_candidates(state)
+
+        semantic = next(score for score in scores if score.candidate_id == "candidate-1")
+        self.assertIn("semantic", semantic.candidate_pool_sources)
 
     def test_fixed_active_policy_metadata_remains_non_adaptive(self):
         state = self._state()

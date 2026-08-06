@@ -20,11 +20,23 @@ class ViewpointScore:
     candidate_id: str
     viewpoint: Viewpoint
     belief_mass_visible: float
+    target_probability: float
+    visibility_probability: float
+    sensor_detection_probability: float
     unobserved_belief_mass: float
+    found_probability: float
     detection_probability: float
     information_gain_nats: float
     travel_distance_m: float
     normalized_travel_cost: float
+    revisit_score: float
+    risk_score: float
+    detection_contribution: float
+    information_gain_contribution: float
+    exploration_contribution: float
+    flight_cost_contribution: float
+    revisit_cost_contribution: float
+    risk_cost_contribution: float
     utility: float
 
     def to_dict(self) -> Dict[str, Any]:
@@ -94,21 +106,49 @@ class ActiveSearchPolicy(SearchPolicy):
     candidates: Tuple[ViewpointCandidate, ...]
     sensor_model: BinarySensorModel = field(default_factory=BinarySensorModel)
     observation_quality: float = 1.0
+    visibility_probabilities: Mapping[str, float] = field(default_factory=dict)
     detection_weight: float = 1.0
     information_gain_weight: float = 1.0
     novelty_weight: float = 0.25
     travel_weight: float = 0.1
+    revisit_weight: float = 0.0
+    risk_weight: float = 0.0
+    candidate_risk_scores: Mapping[str, float] = field(default_factory=dict)
     distance_scale_m: float = 100.0
     minimum_utility: Optional[float] = None
     verification_followup_limit: Optional[int] = None
+    planning_speed_mps: Optional[float] = None
+    completion_time_reserve_s: float = 0.0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "candidates", _validated_candidates(self.candidates))
+        visibility = {
+            str(candidate_id): float(probability)
+            for candidate_id, probability in self.visibility_probabilities.items()
+        }
+        if any(
+            not math.isfinite(probability) or not 0 <= probability <= 1
+            for probability in visibility.values()
+        ):
+            raise ValueError("visibility probabilities must be within [0, 1]")
+        object.__setattr__(self, "visibility_probabilities", visibility)
+        risk_scores = {
+            str(candidate_id): float(score)
+            for candidate_id, score in self.candidate_risk_scores.items()
+        }
+        if any(
+            not math.isfinite(score) or not 0 <= score <= 1
+            for score in risk_scores.values()
+        ):
+            raise ValueError("candidate risk scores must be within [0, 1]")
+        object.__setattr__(self, "candidate_risk_scores", risk_scores)
         weights = (
             self.detection_weight,
             self.information_gain_weight,
             self.novelty_weight,
             self.travel_weight,
+            self.revisit_weight,
+            self.risk_weight,
         )
         if any(not math.isfinite(weight) or weight < 0 for weight in weights):
             raise ValueError("active-search utility weights must be finite and non-negative")
@@ -116,6 +156,10 @@ class ActiveSearchPolicy(SearchPolicy):
             raise ValueError("observation_quality must be within [0, 1]")
         if self.distance_scale_m <= 0:
             raise ValueError("distance_scale_m must be positive")
+        if self.planning_speed_mps is not None and self.planning_speed_mps <= 0:
+            raise ValueError("planning_speed_mps must be positive")
+        if self.completion_time_reserve_s < 0:
+            raise ValueError("completion_time_reserve_s must not be negative")
         if self.minimum_utility is not None and not math.isfinite(self.minimum_utility):
             raise ValueError("minimum_utility must be finite")
         if (
@@ -127,7 +171,12 @@ class ActiveSearchPolicy(SearchPolicy):
     def score_candidates(self, state: SearchState) -> Tuple[ViewpointScore, ...]:
         scores = tuple(
             self._score(candidate, state)
-            for candidate in _remaining_candidates(self.candidates, state)
+            for candidate in _viable_candidates(
+                self.candidates,
+                state,
+                planning_speed_mps=self.planning_speed_mps,
+                completion_time_reserve_s=self.completion_time_reserve_s,
+            )
             if candidate.visible_cell_ids
         )
         return tuple(sorted(
@@ -146,7 +195,12 @@ class ActiveSearchPolicy(SearchPolicy):
             verification_candidates = sorted(
                 (
                     candidate
-                    for candidate in _remaining_candidates(self.candidates, state)
+                    for candidate in _viable_candidates(
+                        self.candidates,
+                        state,
+                        planning_speed_mps=self.planning_speed_mps,
+                        completion_time_reserve_s=self.completion_time_reserve_s,
+                    )
                     if verification_cell_id in candidate.visible_cell_ids
                 ),
                 key=lambda candidate: (
@@ -202,6 +256,17 @@ class ActiveSearchPolicy(SearchPolicy):
             "selected_viewpoint_score": score.to_dict(),
         })
         return metadata
+
+    def is_viewpoint_viable(self, state: SearchState, viewpoint: Viewpoint) -> bool:
+        return any(
+            candidate.viewpoint.key == viewpoint.key
+            for candidate in _viable_candidates(
+                self.candidates,
+                state,
+                planning_speed_mps=self.planning_speed_mps,
+                completion_time_reserve_s=self.completion_time_reserve_s,
+            )
+        )
 
     def _pending_verification_cell_id(
         self,
@@ -271,33 +336,75 @@ class ActiveSearchPolicy(SearchPolicy):
                 self.observation_quality
             )
         )
-        detection_probability = (
-            visible_mass * effective_detection_probability
-            + (1.0 - visible_mass)
+        visibility_probability = self.visibility_probabilities.get(
+            candidate.candidate_id,
+            1.0,
+        )
+        found_probability = (
+            visible_mass
+            * visibility_probability
+            * effective_detection_probability
+        )
+        positive_observation_probability = (
+            found_probability
+            + (1.0 - visible_mass * visibility_probability)
             * self.sensor_model.false_positive_probability
+        )
+        effective_visible_detection = self.sensor_model.effective_detection_probability(
+            self.observation_quality * visibility_probability
         )
         information_gain = _binary_expected_information_gain(
             visible_mass,
-            effective_detection_probability,
+            effective_visible_detection,
             self.sensor_model.false_positive_probability,
         )
         distance = _travel_distance(state.current_viewpoint, candidate.viewpoint)
         normalized_cost = distance / self.distance_scale_m
-        utility = (
-            self.detection_weight * detection_probability
-            + self.information_gain_weight * information_gain
-            + self.novelty_weight * unobserved_mass
-            - self.travel_weight * normalized_cost
+        revisit_score = (
+            sum(
+                state.observed_cell_quality.get(cell_id, 0.0)
+                for cell_id in candidate.visible_cell_ids
+            ) / len(candidate.visible_cell_ids)
+            if candidate.visible_cell_ids else 0.0
         )
+        risk_score = self.candidate_risk_scores.get(candidate.candidate_id, 0.0)
+        detection_contribution = self.detection_weight * found_probability
+        information_gain_contribution = (
+            self.information_gain_weight * information_gain
+        )
+        exploration_contribution = self.novelty_weight * unobserved_mass
+        flight_cost_contribution = -self.travel_weight * normalized_cost
+        revisit_cost_contribution = -self.revisit_weight * revisit_score
+        risk_cost_contribution = -self.risk_weight * risk_score
+        utility = sum((
+            detection_contribution,
+            information_gain_contribution,
+            exploration_contribution,
+            flight_cost_contribution,
+            revisit_cost_contribution,
+            risk_cost_contribution,
+        ))
         return ViewpointScore(
             candidate_id=candidate.candidate_id,
             viewpoint=candidate.viewpoint,
             belief_mass_visible=visible_mass,
+            target_probability=visible_mass,
+            visibility_probability=visibility_probability,
+            sensor_detection_probability=effective_detection_probability,
             unobserved_belief_mass=unobserved_mass,
-            detection_probability=detection_probability,
+            found_probability=found_probability,
+            detection_probability=positive_observation_probability,
             information_gain_nats=information_gain,
             travel_distance_m=distance,
             normalized_travel_cost=normalized_cost,
+            revisit_score=revisit_score,
+            risk_score=risk_score,
+            detection_contribution=detection_contribution,
+            information_gain_contribution=information_gain_contribution,
+            exploration_contribution=exploration_contribution,
+            flight_cost_contribution=flight_cost_contribution,
+            revisit_cost_contribution=revisit_cost_contribution,
+            risk_cost_contribution=risk_cost_contribution,
             utility=utility,
         )
 
@@ -343,6 +450,7 @@ class LookaheadViewpointScore:
     expected_continuation_utility: float
     discount_factor: float
     utility: float
+    candidate_pool_sources: Tuple[str, ...] = ()
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -438,7 +546,12 @@ class AdaptiveActiveSearchPolicy(ActiveSearchPolicy):
         weights = self.adaptive_weight_state(state).adaptive_weights
         scores = tuple(
             self._score_with_weights(candidate, state, weights)
-            for candidate in _remaining_candidates(self.candidates, state)
+            for candidate in _viable_candidates(
+                self.candidates,
+                state,
+                planning_speed_mps=self.planning_speed_mps,
+                completion_time_reserve_s=self.completion_time_reserve_s,
+            )
             if candidate.visible_cell_ids
         )
         return tuple(sorted(
@@ -463,21 +576,67 @@ class AdaptiveActiveSearchPolicy(ActiveSearchPolicy):
     ) -> ViewpointScore:
         score = super()._score(candidate, state)
         utility = (
-            weights["detection"] * score.detection_probability
+            weights["detection"] * score.found_probability
             + weights["information_gain"] * score.information_gain_nats
             + weights["novelty"] * score.unobserved_belief_mass
             - weights["travel"] * score.normalized_travel_cost
+            + score.revisit_cost_contribution
+            + score.risk_cost_contribution
         )
-        return ViewpointScore(
-            candidate_id=score.candidate_id,
-            viewpoint=score.viewpoint,
-            belief_mass_visible=score.belief_mass_visible,
-            unobserved_belief_mass=score.unobserved_belief_mass,
-            detection_probability=score.detection_probability,
-            information_gain_nats=score.information_gain_nats,
-            travel_distance_m=score.travel_distance_m,
-            normalized_travel_cost=score.normalized_travel_cost,
+        return replace(
+            score,
+            detection_contribution=(
+                weights["detection"] * score.found_probability
+            ),
+            information_gain_contribution=(
+                weights["information_gain"] * score.information_gain_nats
+            ),
+            exploration_contribution=(
+                weights["novelty"] * score.unobserved_belief_mass
+            ),
+            flight_cost_contribution=(
+                -weights["travel"] * score.normalized_travel_cost
+            ),
             utility=utility,
+        )
+
+
+@dataclass(frozen=True)
+class OriginalActiveSearchPolicy(ActiveSearchPolicy):
+    """Frozen pre-improvement active-search score used as baseline C."""
+
+    def _score(
+        self,
+        candidate: ViewpointCandidate,
+        state: SearchState,
+    ) -> ViewpointScore:
+        score = super()._score(candidate, state)
+        detection_contribution = (
+            self.detection_weight * score.detection_probability
+        )
+        information_gain_contribution = (
+            self.information_gain_weight * score.information_gain_nats
+        )
+        exploration_contribution = (
+            self.novelty_weight * score.unobserved_belief_mass
+        )
+        flight_cost_contribution = (
+            -self.travel_weight * score.normalized_travel_cost
+        )
+        return replace(
+            score,
+            detection_contribution=detection_contribution,
+            information_gain_contribution=information_gain_contribution,
+            exploration_contribution=exploration_contribution,
+            flight_cost_contribution=flight_cost_contribution,
+            revisit_cost_contribution=0.0,
+            risk_cost_contribution=0.0,
+            utility=sum((
+                detection_contribution,
+                information_gain_contribution,
+                exploration_contribution,
+                flight_cost_contribution,
+            )),
         )
 
 
@@ -495,7 +654,12 @@ class BeliefLookaheadPolicy(ActiveSearchPolicy):
     def score_candidates(self, state: SearchState) -> Tuple[LookaheadViewpointScore, ...]:
         scores = tuple(
             self._lookahead_score(candidate, state)
-            for candidate in _remaining_candidates(self.candidates, state)
+            for candidate in _viable_candidates(
+                self.candidates,
+                state,
+                planning_speed_mps=self.planning_speed_mps,
+                completion_time_reserve_s=self.completion_time_reserve_s,
+            )
             if candidate.visible_cell_ids
         )
         return tuple(sorted(
@@ -531,6 +695,11 @@ class BeliefLookaheadPolicy(ActiveSearchPolicy):
                 posterior,
                 self.observation_quality,
                 immediate.travel_distance_m,
+                travel_time_s=(
+                    immediate.travel_distance_m / self.planning_speed_mps
+                    if self.planning_speed_mps is not None
+                    else 0.0
+                ),
             )
             continuation_scores = ActiveSearchPolicy.score_candidates(self, future_state)
             best = continuation_scores[0] if continuation_scores else None
@@ -559,6 +728,300 @@ class BeliefLookaheadPolicy(ActiveSearchPolicy):
         )
 
 
+@dataclass(frozen=True)
+class AdaptiveBeliefLookaheadPolicy(AdaptiveActiveSearchPolicy):
+    """Budget-aware adaptive search with bounded two-step belief lookahead."""
+
+    discount_factor: float = 0.7
+    lookahead_candidate_limit: int = 16
+    exploitation_fraction: float = 0.3
+    exploration_fraction: float = 0.4
+    semantic_fraction: float = 0.3
+    frontier_fraction_within_exploration: float = 0.5
+    semantic_regions: Mapping[str, Tuple[str, ...]] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not 0.0 <= self.discount_factor <= 1.0:
+            raise ValueError("discount_factor must be within [0, 1]")
+        if self.lookahead_candidate_limit <= 0:
+            raise ValueError("lookahead_candidate_limit must be positive")
+        fractions = (
+            self.exploitation_fraction,
+            self.exploration_fraction,
+            self.semantic_fraction,
+        )
+        if any(not math.isfinite(value) or value < 0 for value in fractions):
+            raise ValueError("candidate pool fractions must be finite and non-negative")
+        if not math.isclose(sum(fractions), 1.0, abs_tol=1e-9):
+            raise ValueError("candidate pool fractions must sum to 1")
+        if not 0 <= self.frontier_fraction_within_exploration <= 1:
+            raise ValueError(
+                "frontier_fraction_within_exploration must be within [0, 1]"
+            )
+        object.__setattr__(self, "semantic_regions", {
+            str(candidate_id): tuple(dict.fromkeys(str(label) for label in labels))
+            for candidate_id, labels in self.semantic_regions.items()
+        })
+
+    def score_candidates(
+        self,
+        state: SearchState,
+    ) -> Tuple[LookaheadViewpointScore, ...]:
+        immediate_scores = AdaptiveActiveSearchPolicy.score_candidates(self, state)
+        candidate_by_id = {
+            candidate.candidate_id: candidate
+            for candidate in _viable_candidates(
+                self.candidates,
+                state,
+                planning_speed_mps=self.planning_speed_mps,
+                completion_time_reserve_s=self.completion_time_reserve_s,
+            )
+        }
+        pool = self._candidate_pool(immediate_scores, candidate_by_id, state)
+        scores = tuple(
+            self._adaptive_lookahead_score(
+                candidate_by_id[immediate.candidate_id],
+                immediate,
+                state,
+                sources,
+            )
+            for immediate, sources in pool
+        )
+        return tuple(sorted(
+            scores,
+            key=lambda score: (-score.utility, score.candidate_id),
+        ))
+
+    def _candidate_pool(
+        self,
+        immediate_scores: Sequence[ViewpointScore],
+        candidate_by_id: Mapping[str, ViewpointCandidate],
+        state: SearchState,
+    ) -> Tuple[Tuple[ViewpointScore, Tuple[str, ...]], ...]:
+        limit = min(self.lookahead_candidate_limit, len(immediate_scores))
+        if limit <= 0:
+            return ()
+        quotas = _candidate_pool_quotas(
+            limit,
+            self.exploitation_fraction,
+            self.exploration_fraction,
+            self.semantic_fraction,
+        )
+        score_by_id = {score.candidate_id: score for score in immediate_scores}
+        selected: list[str] = []
+        sources: Dict[str, list[str]] = {}
+
+        def take(ranking: Sequence[str], count: int, source: str) -> None:
+            for candidate_id in _spatially_diverse_ids(
+                ranking,
+                count,
+                selected,
+                candidate_by_id,
+            ):
+                if candidate_id not in selected:
+                    selected.append(candidate_id)
+                sources.setdefault(candidate_id, []).append(source)
+
+        exploitation = [score.candidate_id for score in immediate_scores]
+        exploration = sorted(
+            exploitation,
+            key=lambda candidate_id: (
+                -_candidate_unexplored_fraction(
+                    candidate_by_id[candidate_id],
+                    state,
+                ),
+                -score_by_id[candidate_id].utility,
+                candidate_id,
+            ),
+        )
+        frontiers = [
+            candidate_id for candidate_id in exploration
+            if _is_frontier_candidate(candidate_by_id[candidate_id], state)
+        ]
+        semantic = _semantic_representative_ids(
+            immediate_scores,
+            self.semantic_regions,
+        )
+
+        take(exploitation, quotas[0], "exploitation")
+        frontier_count = round(
+            quotas[1] * self.frontier_fraction_within_exploration
+        )
+        take(frontiers, frontier_count, "frontier")
+        take(exploration, quotas[1] - frontier_count, "exploration")
+        take(semantic, quotas[2], "semantic")
+        take(exploration, limit - len(selected), "exploration_fill")
+        take(exploitation, limit - len(selected), "exploitation_fill")
+
+        return tuple(
+            (score_by_id[candidate_id], tuple(sources[candidate_id]))
+            for candidate_id in selected[:limit]
+        )
+
+    def _adaptive_lookahead_score(
+        self,
+        candidate: ViewpointCandidate,
+        immediate: ViewpointScore,
+        state: SearchState,
+        candidate_pool_sources: Tuple[str, ...],
+    ) -> LookaheadViewpointScore:
+        branches = []
+        for observation, probability in (
+            ("positive", immediate.detection_probability),
+            ("negative", 1.0 - immediate.detection_probability),
+        ):
+            posterior = _binary_observation_posterior(
+                state.belief,
+                candidate.visible_cell_ids,
+                self.sensor_model.effective_detection_probability(
+                    self.observation_quality
+                ),
+                self.sensor_model.false_positive_probability,
+                positive=observation == "positive",
+                minimum_likelihood=self.sensor_model.minimum_likelihood,
+            )
+            future_state = _hypothetical_state_after_candidate(
+                state,
+                candidate,
+                posterior,
+                self.observation_quality,
+                immediate.travel_distance_m,
+                travel_time_s=(
+                    immediate.travel_distance_m / self.planning_speed_mps
+                    if self.planning_speed_mps is not None
+                    else 0.0
+                ),
+            )
+            continuation_scores = AdaptiveActiveSearchPolicy.score_candidates(
+                self,
+                future_state,
+            )
+            best = continuation_scores[0] if continuation_scores else None
+            branches.append(LookaheadBranchValue(
+                observation=observation,
+                probability=probability,
+                posterior_entropy_nats=_belief_entropy(posterior),
+                best_candidate_id=best.candidate_id if best is not None else None,
+                continuation_utility=best.utility if best is not None else 0.0,
+            ))
+        expected_continuation = sum(
+            branch.probability * branch.continuation_utility
+            for branch in branches
+        )
+        return LookaheadViewpointScore(
+            candidate_id=candidate.candidate_id,
+            viewpoint=candidate.viewpoint,
+            immediate_score=immediate,
+            branches=tuple(branches),
+            expected_continuation_utility=expected_continuation,
+            discount_factor=self.discount_factor,
+            utility=(
+                immediate.utility
+                + self.discount_factor * expected_continuation
+            ),
+            candidate_pool_sources=candidate_pool_sources,
+        )
+
+
+def _candidate_pool_quotas(
+    limit: int,
+    exploitation_fraction: float,
+    exploration_fraction: float,
+    semantic_fraction: float,
+) -> Tuple[int, int, int]:
+    raw = tuple(
+        limit * fraction
+        for fraction in (
+            exploitation_fraction,
+            exploration_fraction,
+            semantic_fraction,
+        )
+    )
+    quotas = [math.floor(value) for value in raw]
+    remainder = limit - sum(quotas)
+    order = sorted(
+        range(3),
+        key=lambda index: (-(raw[index] - quotas[index]), index),
+    )
+    for index in order[:remainder]:
+        quotas[index] += 1
+    return tuple(quotas)
+
+
+def _candidate_unexplored_fraction(
+    candidate: ViewpointCandidate,
+    state: SearchState,
+) -> float:
+    if not candidate.visible_cell_ids:
+        return 0.0
+    return sum(
+        1.0 - state.observed_cell_quality.get(cell_id, 0.0)
+        for cell_id in candidate.visible_cell_ids
+    ) / len(candidate.visible_cell_ids)
+
+
+def _is_frontier_candidate(
+    candidate: ViewpointCandidate,
+    state: SearchState,
+) -> bool:
+    qualities = tuple(
+        state.observed_cell_quality.get(cell_id, 0.0)
+        for cell_id in candidate.visible_cell_ids
+    )
+    return bool(qualities) and any(value > 0 for value in qualities) and any(
+        value < 1 for value in qualities
+    )
+
+
+def _semantic_representative_ids(
+    scores: Sequence[ViewpointScore],
+    semantic_regions: Mapping[str, Tuple[str, ...]],
+) -> Tuple[str, ...]:
+    representatives: Dict[str, str] = {}
+    for score in scores:
+        for region in semantic_regions.get(score.candidate_id, ()):
+            representatives.setdefault(region, score.candidate_id)
+    return tuple(dict.fromkeys(representatives.values()))
+
+
+def _spatially_diverse_ids(
+    ranking: Sequence[str],
+    count: int,
+    already_selected: Sequence[str],
+    candidate_by_id: Mapping[str, ViewpointCandidate],
+) -> Tuple[str, ...]:
+    available = [
+        candidate_id for candidate_id in ranking
+        if candidate_id not in already_selected and candidate_id in candidate_by_id
+    ]
+    selected = list(already_selected)
+    additions = []
+    rank = {candidate_id: index for index, candidate_id in enumerate(ranking)}
+    while available and len(additions) < max(0, count):
+        if not selected:
+            best = available[0]
+        else:
+            best = max(
+                available,
+                key=lambda candidate_id: (
+                    min(
+                        _travel_distance(
+                            candidate_by_id[candidate_id].viewpoint,
+                            candidate_by_id[chosen_id].viewpoint,
+                        )
+                        for chosen_id in selected
+                    ),
+                    -rank[candidate_id],
+                    candidate_id,
+                ),
+            )
+        additions.append(best)
+        selected.append(best)
+        available.remove(best)
+    return tuple(additions)
+
+
 def _validated_candidates(
     candidates: Sequence[ViewpointCandidate],
 ) -> Tuple[ViewpointCandidate, ...]:
@@ -579,6 +1042,29 @@ def _remaining_candidates(
         candidate
         for candidate in candidates
         if candidate.viewpoint.key not in visited
+    )
+
+
+def _viable_candidates(
+    candidates: Sequence[ViewpointCandidate],
+    state: SearchState,
+    *,
+    planning_speed_mps: Optional[float],
+    completion_time_reserve_s: float,
+) -> Tuple[ViewpointCandidate, ...]:
+    remaining = _remaining_candidates(candidates, state)
+    limit = state.task.budget.time_limit_s
+    if limit is None or planning_speed_mps is None:
+        return remaining
+    available_time_s = max(
+        0.0,
+        limit - state.elapsed_time_s - completion_time_reserve_s,
+    )
+    return tuple(
+        candidate
+        for candidate in remaining
+        if _travel_distance(state.current_viewpoint, candidate.viewpoint)
+        / planning_speed_mps <= available_time_s
     )
 
 
@@ -674,6 +1160,7 @@ def _hypothetical_state_after_candidate(
     posterior: Mapping[str, float],
     observation_quality: float,
     travel_distance_m: float,
+    travel_time_s: float = 0.0,
 ) -> SearchState:
     coverage = dict(state.observed_cell_quality)
     for cell_id in candidate.visible_cell_ids:
@@ -686,6 +1173,7 @@ def _hypothetical_state_after_candidate(
             state.visited_viewpoint_keys + (candidate.viewpoint.key,)
         ),
         observed_cell_quality=coverage,
+        elapsed_time_s=state.elapsed_time_s + travel_time_s,
         distance_travelled_m=state.distance_travelled_m + travel_distance_m,
         step_index=state.step_index + 1,
     )

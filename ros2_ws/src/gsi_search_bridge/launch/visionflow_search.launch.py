@@ -7,6 +7,7 @@ from launch.conditions import IfCondition
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
@@ -21,6 +22,7 @@ def generate_launch_description():
     fcu_url = LaunchConfiguration("fcu_url")
     bridge_config = LaunchConfiguration("sensor_bridge_config")
     search_config = LaunchConfiguration("search_config")
+    search_time_budget_s = LaunchConfiguration("search_time_budget_s")
 
     return LaunchDescription([
         DeclareLaunchArgument("start_mavros", default_value="true"),
@@ -33,6 +35,10 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "search_config",
             default_value=default_search_config,
+        ),
+        DeclareLaunchArgument(
+            "search_time_budget_s",
+            default_value="180.0",
         ),
         DeclareLaunchArgument(
             "fcu_url",
@@ -70,7 +76,15 @@ def generate_launch_description():
             package="gsi_search_bridge",
             executable="search_node",
             name="gsi_search_node",
-            parameters=[search_config],
+            parameters=[
+                search_config,
+                {
+                    "search_time_budget_s": ParameterValue(
+                        search_time_budget_s,
+                        value_type=float,
+                    ),
+                },
+            ],
             output="screen",
         ),
     ])

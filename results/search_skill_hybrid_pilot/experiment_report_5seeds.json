@@ -1,0 +1,615 @@
+{
+  "baseline_reference": {
+    "baseline_id": "search-skill-baseline-2026-08-05",
+    "baseline_modified": false,
+    "frozen_method": "D_improved_active_search",
+    "frozen_report": "results/search_skill_acceptance/evaluation_report.json"
+  },
+  "configuration": {
+    "base_seed": 0,
+    "condition_count": 24,
+    "episode_count": 240,
+    "paired_policies": [
+      "improved_active",
+      "hybrid_supervisor"
+    ],
+    "pilot": true,
+    "repetitions_per_condition": 5,
+    "shared_policy_config": {
+      "altitude_m": 30.0,
+      "base_seed": 0,
+      "candidate_stride_cells": 1,
+      "completion_time_reserve_s": 3.0,
+      "correlated_false_alarm_shared_identity": false,
+      "coverage_observation_spacing_m": 20.0,
+      "coverage_pass_spacing_m": 20.0,
+      "detection_confidence": 1.0,
+      "detection_weight": 1.0,
+      "distance_scale_m": 100.0,
+      "distance_scale_mode": "map_diagonal",
+      "energy_per_m": 0.05,
+      "exploitation_fraction": 0.3,
+      "exploration_fraction": 0.4,
+      "false_alarm_correlation": 0.0,
+      "footprint_radius_m": 25.0,
+      "frontier_fraction_within_exploration": 0.5,
+      "information_gain_weight": 0.8,
+      "localization_error_std_m": 0.0,
+      "lookahead_candidate_limit": 16,
+      "lookahead_discount_factor": 0.7,
+      "max_candidates": null,
+      "novelty_weight": 0.4,
+      "observation_energy": 0.5,
+      "observation_quality": 1.0,
+      "observation_time_s": 1.0,
+      "persistent_distractor_probability": 0.0,
+      "policy_names": [
+        "improved_active",
+        "hybrid_supervisor"
+      ],
+      "repetitions": 5,
+      "revisit_weight": 0.2,
+      "risk_weight": 0.15,
+      "semantic_fraction": 0.3,
+      "sensor_model": {
+        "detection_probability": 0.85,
+        "false_positive_probability": 0.01,
+        "minimum_likelihood": 1e-09
+      },
+      "speed_mps": 10.0,
+      "travel_weight": 0.12,
+      "verification_followup_limit": null
+    }
+  },
+  "experiment_id": "hybrid-supervisor-pilot-seeds-0-4",
+  "hybrid_mode_usage": {
+    "action_count": 973,
+    "action_fraction_by_mode": {
+      "coverage_fallback": 0.2620760534429599,
+      "improved_active": 0.408016443987667,
+      "random_escape": 0.019527235354573486,
+      "visibility_fallback": 0.3103802672147996
+    },
+    "actions_by_mode": {
+      "coverage_fallback": 255,
+      "improved_active": 397,
+      "random_escape": 19,
+      "visibility_fallback": 302
+    },
+    "decisions_by_reason": {
+      "belief_and_coverage_stagnation": 10,
+      "default_improved_active": 213,
+      "global_coverage_deficit": 148,
+      "minimum_mode_residence": 381,
+      "positive_detection_confirmation": 57,
+      "visibility_model_unreliable": 164
+    },
+    "mean_switches_per_episode": 2.6416666666666666,
+    "switch_count": 317
+  },
+  "hypothesis": "A rule-based supervisor can improve worst-case discovery and resource efficiency by delegating complete viewpoint actions to the frozen A/B/C/D policies.",
+  "method_e": {
+    "confidence_gating_enabled": true,
+    "default_mode": "improved_active",
+    "implementation": "HybridSearchSupervisorPolicy",
+    "minimum_mode_residence_actions": 2,
+    "modes": {
+      "coverage_fallback": "A global coverage fallback",
+      "improved_active": "D default and confirmation",
+      "random_escape": "B stagnation escape",
+      "visibility_fallback": "C visibility-model fallback"
+    },
+    "score_fusion": false
+  },
+  "paired_comparison": {
+    "brier_ratio": 1.0399340243182806,
+    "hybrid_only_successes": 1,
+    "improved_only_successes": 5,
+    "matched_outcomes": 114,
+    "mean_total_distance_ratio": 0.9641808503394691,
+    "pair_count": 120,
+    "replan_ratio": 1.1511470985155197,
+    "success_per_km_ratio": 0.9334348423152437,
+    "success_rate_delta": -0.033333333333333326,
+    "successful_detection_distance_ratio": 0.969052512273593,
+    "successful_detection_time_ratio": 0.9687522715919119
+  },
+  "pilot_decision": {
+    "decision": "DO_NOT_PROMOTE",
+    "gate_count": 5,
+    "gates": {
+      "improved_worst_case_success": false,
+      "non_decreasing_success_per_km": false,
+      "non_decreasing_success_rate": false,
+      "non_increasing_replan_proxy": false,
+      "non_worsening_brier": false
+    },
+    "interpretation": "Pilot evidence is directional only; failed gates reject the current supervisor rule set but do not establish a publication result.",
+    "passed_gate_count": 0
+  },
+  "policy_results": {
+    "hybrid_supervisor": {
+      "belief_calibration_brier": {
+        "ci95_high": 0.02383766996548914,
+        "ci95_low": 0.017547117374851817,
+        "mean": 0.020692393670170478,
+        "sample_count": 120
+      },
+      "episode_count": 120,
+      "failure_categories": {
+        "budget_exhausted_before_target_region": 33,
+        "none": 36,
+        "occluded": 19,
+        "sensor_miss": 31,
+        "target_region_unsearched": 1
+      },
+      "mean_detection_distance_m": {
+        "ci95_high": 203.38725163300964,
+        "ci95_low": 144.67900669536974,
+        "mean": 174.0331291641897,
+        "sample_count": 36
+      },
+      "mean_detection_time_s": {
+        "ci95_high": 25.1424821306921,
+        "ci95_low": 18.275254813256954,
+        "mean": 21.708868471974526,
+        "sample_count": 36
+      },
+      "mean_total_distance_m": {
+        "ci95_high": 354.97167846278876,
+        "ci95_low": 307.4430504949356,
+        "mean": 331.2073644788622,
+        "sample_count": 120
+      },
+      "replans": {
+        "ci95_high": 7.595329682851935,
+        "ci95_low": 6.621336983814731,
+        "mean": 7.108333333333333,
+        "sample_count": 120
+      },
+      "success_per_km": 0.9057769608234243,
+      "success_rate": {
+        "ci95_high": 0.38233646894084694,
+        "ci95_low": 0.217663531059153,
+        "mean": 0.3,
+        "sample_count": 120
+      },
+      "worst_case_scenario_success_rate": 0.0
+    },
+    "improved_active": {
+      "belief_calibration_brier": {
+        "ci95_high": 0.022993694543238182,
+        "ci95_low": 0.016801894765872443,
+        "mean": 0.019897794654555313,
+        "sample_count": 120
+      },
+      "episode_count": 120,
+      "failure_categories": {
+        "budget_exhausted_before_target_region": 5,
+        "none": 40,
+        "occluded": 39,
+        "sensor_miss": 29,
+        "target_region_unsearched": 7
+      },
+      "mean_detection_distance_m": {
+        "ci95_high": 206.05753724205195,
+        "ci95_low": 153.12450286405706,
+        "mean": 179.5910200530545,
+        "sample_count": 40
+      },
+      "mean_detection_time_s": {
+        "ci95_high": 25.56299558038765,
+        "ci95_low": 19.255208430223256,
+        "mean": 22.409102005305453,
+        "sample_count": 40
+      },
+      "mean_total_distance_m": {
+        "ci95_high": 366.47991112955657,
+        "ci95_low": 320.5434089503861,
+        "mean": 343.51166003997133,
+        "sample_count": 120
+      },
+      "replans": {
+        "ci95_high": 6.589717929181164,
+        "ci95_low": 5.760282070818835,
+        "mean": 6.175,
+        "sample_count": 120
+      },
+      "success_per_km": 0.9703697781162548,
+      "success_rate": {
+        "ci95_high": 0.4180319532108161,
+        "ci95_low": 0.2486347134558505,
+        "mean": 0.3333333333333333,
+        "sample_count": 120
+      },
+      "worst_case_scenario_success_rate": 0.0
+    }
+  },
+  "scenario_results": [
+    {
+      "environment": "open_area",
+      "policies": {
+        "hybrid_supervisor": {
+          "mean_distance_m": 141.62376700285577,
+          "success_rate": 1.0
+        },
+        "improved_active": {
+          "mean_distance_m": 141.62376700285577,
+          "success_rate": 1.0
+        }
+      },
+      "prior_condition": "correct",
+      "scenario_id": "open_area__correct__normal",
+      "sensor_condition": "normal"
+    },
+    {
+      "environment": "open_area",
+      "policies": {
+        "hybrid_supervisor": {
+          "mean_distance_m": 136.2842712474619,
+          "success_rate": 1.0
+        },
+        "improved_active": {
+          "mean_distance_m": 136.2842712474619,
+          "success_rate": 1.0
+        }
+      },
+      "prior_condition": "correct",
+      "scenario_id": "open_area__correct__reduced_quality",
+      "sensor_condition": "reduced_quality"
+    },
+    {
+      "environment": "open_area",
+      "policies": {
+        "hybrid_supervisor": {
+          "mean_distance_m": 335.0577088923448,
+          "success_rate": 0.6
+        },
+        "improved_active": {
+          "mean_distance_m": 373.82705292352256,
+          "success_rate": 0.4
+        }
+      },
+      "prior_condition": "wrong",
+      "scenario_id": "open_area__wrong__normal",
+      "sensor_condition": "normal"
+    },
+    {
+      "environment": "open_area",
+      "policies": {
+        "hybrid_supervisor": {
+          "mean_distance_m": 235.7720131310185,
+          "success_rate": 0.4
+        },
+        "improved_active": {
+          "mean_distance_m": 293.42387841515927,
+          "success_rate": 0.4
+        }
+      },
+      "prior_condition": "wrong",
+      "scenario_id": "open_area__wrong__reduced_quality",
+      "sensor_condition": "reduced_quality"
+    },
+    {
+      "environment": "open_area",
+      "policies": {
+        "hybrid_supervisor": {
+          "mean_distance_m": 168.80838481816107,
+          "success_rate": 0.8
+        },
+        "improved_active": {
+          "mean_distance_m": 167.11708697745937,
+          "success_rate": 1.0
+        }
+      },
+      "prior_condition": "uniform",
+      "scenario_id": "open_area__uniform__normal",
+      "sensor_condition": "normal"
+    },
+    {
+      "environment": "open_area",
+      "policies": {
+        "hybrid_supervisor": {
+          "mean_distance_m": 225.94990270745683,
+          "success_rate": 0.6
+        },
+        "improved_active": {
+          "mean_distance_m": 225.94990270745683,
+          "success_rate": 0.6
+        }
+      },
+      "prior_condition": "uniform",
+      "scenario_id": "open_area__uniform__reduced_quality",
+      "sensor_condition": "reduced_quality"
+    },
+    {
+      "environment": "street_edge",
+      "policies": {
+        "hybrid_supervisor": {
+          "mean_distance_m": 272.56584601882116,
+          "success_rate": 0.8
+        },
+        "improved_active": {
+          "mean_distance_m": 274.82941665480917,
+          "success_rate": 0.8
+        }
+      },
+      "prior_condition": "correct",
+      "scenario_id": "street_edge__correct__normal",
+      "sensor_condition": "normal"
+    },
+    {
+      "environment": "street_edge",
+      "policies": {
+        "hybrid_supervisor": {
+          "mean_distance_m": 374.74579349993866,
+          "success_rate": 0.4
+        },
+        "improved_active": {
+          "mean_distance_m": 339.4915809769691,
+          "success_rate": 0.4
+        }
+      },
+      "prior_condition": "correct",
+      "scenario_id": "street_edge__correct__reduced_quality",
+      "sensor_condition": "reduced_quality"
+    },
+    {
+      "environment": "street_edge",
+      "policies": {
+        "hybrid_supervisor": {
+          "mean_distance_m": 320.544527450336,
+          "success_rate": 0.0
+        },
+        "improved_active": {
+          "mean_distance_m": 396.4272959663649,
+          "success_rate": 0.2
+        }
+      },
+      "prior_condition": "wrong",
+      "scenario_id": "street_edge__wrong__normal",
+      "sensor_condition": "normal"
+    },
+    {
+      "environment": "street_edge",
+      "policies": {
+        "hybrid_supervisor": {
+          "mean_distance_m": 337.4299932891407,
+          "success_rate": 0.0
+        },
+        "improved_active": {
+          "mean_distance_m": 400.5822493627413,
+          "success_rate": 0.0
+        }
+      },
+      "prior_condition": "wrong",
+      "scenario_id": "street_edge__wrong__reduced_quality",
+      "sensor_condition": "reduced_quality"
+    },
+    {
+      "environment": "street_edge",
+      "policies": {
+        "hybrid_supervisor": {
+          "mean_distance_m": 290.1639395911146,
+          "success_rate": 0.6
+        },
+        "improved_active": {
+          "mean_distance_m": 283.5432852581295,
+          "success_rate": 0.8
+        }
+      },
+      "prior_condition": "uniform",
+      "scenario_id": "street_edge__uniform__normal",
+      "sensor_condition": "normal"
+    },
+    {
+      "environment": "street_edge",
+      "policies": {
+        "hybrid_supervisor": {
+          "mean_distance_m": 320.3048686101806,
+          "success_rate": 0.4
+        },
+        "improved_active": {
+          "mean_distance_m": 315.4629039482942,
+          "success_rate": 0.4
+        }
+      },
+      "prior_condition": "uniform",
+      "scenario_id": "street_edge__uniform__reduced_quality",
+      "sensor_condition": "reduced_quality"
+    },
+    {
+      "environment": "woodland",
+      "policies": {
+        "hybrid_supervisor": {
+          "mean_distance_m": 353.73640867116353,
+          "success_rate": 0.4
+        },
+        "improved_active": {
+          "mean_distance_m": 322.55937540672903,
+          "success_rate": 0.4
+        }
+      },
+      "prior_condition": "correct",
+      "scenario_id": "woodland__correct__normal",
+      "sensor_condition": "normal"
+    },
+    {
+      "environment": "woodland",
+      "policies": {
+        "hybrid_supervisor": {
+          "mean_distance_m": 501.1717872258021,
+          "success_rate": 0.0
+        },
+        "improved_active": {
+          "mean_distance_m": 433.2757640891221,
+          "success_rate": 0.0
+        }
+      },
+      "prior_condition": "correct",
+      "scenario_id": "woodland__correct__reduced_quality",
+      "sensor_condition": "reduced_quality"
+    },
+    {
+      "environment": "woodland",
+      "policies": {
+        "hybrid_supervisor": {
+          "mean_distance_m": 332.378386736631,
+          "success_rate": 0.0
+        },
+        "improved_active": {
+          "mean_distance_m": 336.8820847327886,
+          "success_rate": 0.4
+        }
+      },
+      "prior_condition": "wrong",
+      "scenario_id": "woodland__wrong__normal",
+      "sensor_condition": "normal"
+    },
+    {
+      "environment": "woodland",
+      "policies": {
+        "hybrid_supervisor": {
+          "mean_distance_m": 326.3709449973,
+          "success_rate": 0.0
+        },
+        "improved_active": {
+          "mean_distance_m": 366.19036948846536,
+          "success_rate": 0.0
+        }
+      },
+      "prior_condition": "wrong",
+      "scenario_id": "woodland__wrong__reduced_quality",
+      "sensor_condition": "reduced_quality"
+    },
+    {
+      "environment": "woodland",
+      "policies": {
+        "hybrid_supervisor": {
+          "mean_distance_m": 420.87593111331705,
+          "success_rate": 0.0
+        },
+        "improved_active": {
+          "mean_distance_m": 435.390159628019,
+          "success_rate": 0.0
+        }
+      },
+      "prior_condition": "uniform",
+      "scenario_id": "woodland__uniform__normal",
+      "sensor_condition": "normal"
+    },
+    {
+      "environment": "woodland",
+      "policies": {
+        "hybrid_supervisor": {
+          "mean_distance_m": 435.67756820596514,
+          "success_rate": 0.0
+        },
+        "improved_active": {
+          "mean_distance_m": 435.9865017558221,
+          "success_rate": 0.0
+        }
+      },
+      "prior_condition": "uniform",
+      "scenario_id": "woodland__uniform__reduced_quality",
+      "sensor_condition": "reduced_quality"
+    },
+    {
+      "environment": "building_passage",
+      "policies": {
+        "hybrid_supervisor": {
+          "mean_distance_m": 486.8686991755846,
+          "success_rate": 0.2
+        },
+        "improved_active": {
+          "mean_distance_m": 397.4060741371477,
+          "success_rate": 0.2
+        }
+      },
+      "prior_condition": "correct",
+      "scenario_id": "building_passage__correct__normal",
+      "sensor_condition": "normal"
+    },
+    {
+      "environment": "building_passage",
+      "policies": {
+        "hybrid_supervisor": {
+          "mean_distance_m": 491.4654373966241,
+          "success_rate": 0.0
+        },
+        "improved_active": {
+          "mean_distance_m": 446.1888347212387,
+          "success_rate": 0.0
+        }
+      },
+      "prior_condition": "correct",
+      "scenario_id": "building_passage__correct__reduced_quality",
+      "sensor_condition": "reduced_quality"
+    },
+    {
+      "environment": "building_passage",
+      "policies": {
+        "hybrid_supervisor": {
+          "mean_distance_m": 297.76549238898906,
+          "success_rate": 0.0
+        },
+        "improved_active": {
+          "mean_distance_m": 436.0314534426649,
+          "success_rate": 0.0
+        }
+      },
+      "prior_condition": "wrong",
+      "scenario_id": "building_passage__wrong__normal",
+      "sensor_condition": "normal"
+    },
+    {
+      "environment": "building_passage",
+      "policies": {
+        "hybrid_supervisor": {
+          "mean_distance_m": 318.4705595656498,
+          "success_rate": 0.0
+        },
+        "improved_active": {
+          "mean_distance_m": 424.75293206934504,
+          "success_rate": 0.0
+        }
+      },
+      "prior_condition": "wrong",
+      "scenario_id": "building_passage__wrong__reduced_quality",
+      "sensor_condition": "reduced_quality"
+    },
+    {
+      "environment": "building_passage",
+      "policies": {
+        "hybrid_supervisor": {
+          "mean_distance_m": 413.6230109782161,
+          "success_rate": 0.0
+        },
+        "improved_active": {
+          "mean_distance_m": 432.1897519818291,
+          "success_rate": 0.0
+        }
+      },
+      "prior_condition": "uniform",
+      "scenario_id": "building_passage__uniform__normal",
+      "sensor_condition": "normal"
+    },
+    {
+      "environment": "building_passage",
+      "policies": {
+        "hybrid_supervisor": {
+          "mean_distance_m": 411.32150477862007,
+          "success_rate": 0.0
+        },
+        "improved_active": {
+          "mean_distance_m": 428.86384806491606,
+          "success_rate": 0.0
+        }
+      },
+      "prior_condition": "uniform",
+      "scenario_id": "building_passage__uniform__reduced_quality",
+      "sensor_condition": "reduced_quality"
+    }
+  ],
+  "schema_version": "gsi-search-skill-hybrid-pilot-v1"
+}

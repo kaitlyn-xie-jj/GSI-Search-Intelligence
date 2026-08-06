@@ -6,7 +6,7 @@ import json
 import math
 import struct
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Iterable, Mapping, Optional, Tuple
 
 import rclpy
 from geometry_msgs.msg import PoseStamped
@@ -21,6 +21,7 @@ from .pointcloud_projection import PointCloudGroundProjector
 from .scenario_context import load_search_scenario_context
 
 from modules.search_intelligence import (
+    AdaptiveBeliefLookaheadPolicy,
     AdaptiveActiveSearchPolicy,
     ActiveSearchPolicy,
     BayesianBeliefUpdater,
@@ -54,6 +55,9 @@ class GsiSearchNode(Node):
         self._command_start_time_s = 0.0
         self._command_start_distance_m = 0.0
         self._command_start_battery: Optional[float] = None
+        self._observation_checkpoint_time_s = 0.0
+        self._observation_checkpoint_distance_m = 0.0
+        self._observation_checkpoint_battery: Optional[float] = None
         self._settled_since_s: Optional[float] = None
         self._last_goal_publish_s = float("-inf")
         self._last_progress_log_s = float("-inf")
@@ -106,6 +110,7 @@ class GsiSearchNode(Node):
             "flight_altitude_m": 20.0,
             "sensor_footprint_radius_m": 15.0,
             "max_viewpoints": 30,
+            "search_time_budget_s": 180.0,
             "min_confirmations": 2,
             "max_localization_error_m": 5.0,
             "verification_followup_limit": 0,
@@ -117,7 +122,18 @@ class GsiSearchNode(Node):
             "active_information_gain_weight": 1.0,
             "active_novelty_weight": 0.25,
             "active_travel_weight": 0.1,
+            "active_revisit_weight": 0.2,
+            "active_risk_weight": 0.25,
             "active_adaptive_weights_enabled": True,
+            "active_belief_lookahead_enabled": False,
+            "active_lookahead_discount_factor": 0.7,
+            "active_lookahead_candidate_limit": 16,
+            "active_candidate_exploitation_fraction": 0.3,
+            "active_candidate_exploration_fraction": 0.4,
+            "active_candidate_semantic_fraction": 0.3,
+            "active_candidate_frontier_fraction": 0.5,
+            "active_planning_speed_mps": 1.0,
+            "active_completion_time_reserve_s": 5.0,
             "active_distance_scale_mode": "fixed",
             "active_distance_scale_m": 100.0,
             "position_tolerance_m": 0.75,
@@ -128,11 +144,21 @@ class GsiSearchNode(Node):
             "sensor_timeout_s": 0.5,
             "maximum_sensor_skew_s": 0.25,
             "minimum_observation_quality": 0.0,
+            "minimum_negative_observation_quality": 0.5,
+            "minimum_projected_ground_points": 10,
             "require_detections": True,
             "require_point_cloud": False,
             "record_first_positive_detection_in_transit": False,
             "transit_detection_max_sensor_skew_s": 1.0,
             "transit_detection_min_observation_quality": 0.5,
+            "record_negative_observations_in_transit": False,
+            "transit_negative_min_interval_s": 10.0,
+            "transit_negative_min_distance_m": 20.0,
+            "transit_negative_min_new_cells": 3,
+            "replan_min_interval_s": 20.0,
+            "replan_belief_total_variation_threshold": 0.1,
+            "replan_kl_divergence_threshold_nats": 0.05,
+            "replan_expected_reward_change_threshold": 0.2,
             "camera_translation_x_m": 0.0,
             "camera_translation_y_m": 0.0,
             "camera_translation_z_m": 0.0,
@@ -216,6 +242,9 @@ class GsiSearchNode(Node):
         if self._session.completed:
             self._publish_outcome()
             return
+        if self._time_budget_exhausted():
+            self._publish_outcome()
+            return
         if self._commanded_viewpoint is None:
             viewpoint = self._session.next_viewpoint()
             if viewpoint is None:
@@ -226,8 +255,17 @@ class GsiSearchNode(Node):
         self._republish_goal_if_due()
         if self._can_record_positive_detection_in_transit():
             self._transit_detection_recorded = True
-            self._record_sensor_observation("positive_detection_in_transit")
+            self._record_sensor_observation(
+                "positive_detection_in_transit",
+                transit=True,
+            )
             return
+        if self._can_record_negative_detection_in_transit():
+            if self._record_sensor_observation(
+                "negative_detection_in_transit",
+                transit=True,
+            ):
+                return
         if not self._is_settled_at(self._commanded_viewpoint):
             self._settled_since_s = None
             self._log_progress("traveling")
@@ -264,6 +302,7 @@ class GsiSearchNode(Node):
                 ],
             },
             "target_token": self._parameter("target_query"),
+            "time_budget_s": float(self._parameter("search_time_budget_s")),
             "max_viewpoints": int(self._parameter("max_viewpoints")),
             "min_confirmations": int(self._parameter("min_confirmations")),
             "max_localization_error_m": float(
@@ -309,30 +348,87 @@ class GsiSearchNode(Node):
         adaptive_weights_enabled = bool(
             self._parameter("active_adaptive_weights_enabled")
         )
-        policy_type = (
-            AdaptiveActiveSearchPolicy
-            if adaptive_weights_enabled
-            else ActiveSearchPolicy
+        lookahead_enabled = bool(
+            self._parameter("active_belief_lookahead_enabled")
         )
-        policy = policy_type(
-            candidates,
-            sensor_model=sensor_model,
-            detection_weight=float(self._parameter("active_detection_weight")),
-            information_gain_weight=float(
+        policy_type = ActiveSearchPolicy
+        if adaptive_weights_enabled and lookahead_enabled:
+            policy_type = AdaptiveBeliefLookaheadPolicy
+        elif adaptive_weights_enabled:
+            policy_type = AdaptiveActiveSearchPolicy
+        policy_kwargs = {
+            "candidates": candidates,
+            "sensor_model": sensor_model,
+            "detection_weight": float(self._parameter("active_detection_weight")),
+            "information_gain_weight": float(
                 self._parameter("active_information_gain_weight")
             ),
-            novelty_weight=float(self._parameter("active_novelty_weight")),
-            travel_weight=float(self._parameter("active_travel_weight")),
-            distance_scale_m=distance_scale_m,
-            verification_followup_limit=(
+            "novelty_weight": float(self._parameter("active_novelty_weight")),
+            "travel_weight": float(self._parameter("active_travel_weight")),
+            "revisit_weight": float(self._parameter("active_revisit_weight")),
+            "risk_weight": float(self._parameter("active_risk_weight")),
+            "distance_scale_m": distance_scale_m,
+            "planning_speed_mps": float(
+                self._parameter("active_planning_speed_mps")
+            ),
+            "completion_time_reserve_s": float(
+                self._parameter("active_completion_time_reserve_s")
+            ),
+            "verification_followup_limit": (
                 verification_limit if verification_limit > 0 else None
             ),
-        )
+        }
+        cell_by_id = {cell.cell_id: cell for cell in grid.searchable_cells}
+        policy_kwargs.update({
+            "visibility_probabilities": {
+                candidate.candidate_id: _semantic_visibility_probability(
+                    cell_by_id[candidate.anchor_cell_id].semantic_labels
+                )
+                for candidate in candidates
+            },
+            "candidate_risk_scores": {
+                candidate.candidate_id: _semantic_risk_score(
+                    cell_by_id[candidate.anchor_cell_id].semantic_labels
+                )
+                for candidate in candidates
+            },
+        })
+        if policy_type is AdaptiveBeliefLookaheadPolicy:
+            policy_kwargs.update({
+                "discount_factor": float(
+                    self._parameter("active_lookahead_discount_factor")
+                ),
+                "lookahead_candidate_limit": int(
+                    self._parameter("active_lookahead_candidate_limit")
+                ),
+                "exploitation_fraction": float(
+                    self._parameter("active_candidate_exploitation_fraction")
+                ),
+                "exploration_fraction": float(
+                    self._parameter("active_candidate_exploration_fraction")
+                ),
+                "semantic_fraction": float(
+                    self._parameter("active_candidate_semantic_fraction")
+                ),
+                "frontier_fraction_within_exploration": float(
+                    self._parameter("active_candidate_frontier_fraction")
+                ),
+                "semantic_regions": {
+                    candidate.candidate_id: cell_by_id[
+                        candidate.anchor_cell_id
+                    ].semantic_labels
+                    for candidate in candidates
+                },
+            })
+        policy = policy_type(**policy_kwargs)
         self._adapter = SearchObservationAdapter(
             grid,
             target_query=str(self._parameter("target_query")),
             fallback_footprint_radius_m=footprint,
             maximum_sensor_skew_s=float(self._parameter("maximum_sensor_skew_s")),
+            minimum_negative_observation_quality=float(
+                self._parameter("minimum_negative_observation_quality")
+            ),
         )
         self._session = SearchSession(
             task,
@@ -348,18 +444,21 @@ class GsiSearchNode(Node):
                     ),
                     "novelty": float(self._parameter("active_novelty_weight")),
                     "travel": float(self._parameter("active_travel_weight")),
+                    "revisit": float(self._parameter("active_revisit_weight")),
+                    "risk": float(self._parameter("active_risk_weight")),
                 },
                 "active_distance_scale_mode": distance_scale_mode,
                 "active_distance_scale_m": distance_scale_m,
                 "active_adaptive_weights_enabled": adaptive_weights_enabled,
+                "active_belief_lookahead_enabled": lookahead_enabled,
                 **scenario.policy_metadata,
             },
             search_grid=grid,
             belief_updater=BayesianBeliefUpdater(sensor_model),
         )
         self.get_logger().info(
-            f"Initialized {'adaptive' if adaptive_weights_enabled else 'fixed'} "
-            f"active search with {len(candidates)} candidate viewpoints; "
+            f"Initialized {policy_type.__name__} with "
+            f"{len(candidates)} candidate viewpoints; "
             f"semantics={scenario.policy_metadata['semantic_map_loaded']}, "
             f"prior={scenario.policy_metadata['prior_loaded']}"
         )
@@ -369,6 +468,9 @@ class GsiSearchNode(Node):
         self._command_start_time_s = self._now_s()
         self._command_start_distance_m = self._odometry_distance_m
         self._command_start_battery = self._battery_percentage
+        self._observation_checkpoint_time_s = self._command_start_time_s
+        self._observation_checkpoint_distance_m = self._command_start_distance_m
+        self._observation_checkpoint_battery = self._command_start_battery
         self._settled_since_s = None
         self._publish_goal(viewpoint)
         self._write_trace("command", {
@@ -395,7 +497,12 @@ class GsiSearchNode(Node):
         self._goal_publisher.publish(message)
         self._last_goal_publish_s = self._now_s()
 
-    def _record_sensor_observation(self, trigger: str) -> None:
+    def _record_sensor_observation(
+        self,
+        trigger: str,
+        *,
+        transit: bool = False,
+    ) -> bool:
         assert self._session is not None
         assert self._adapter is not None
         assert self._commanded_viewpoint is not None
@@ -406,6 +513,24 @@ class GsiSearchNode(Node):
             if now - item[2] <= timeout
         }
         visible_ground_points = self._visible_ground_points(fresh)
+        minimum_projected_points = int(
+            self._parameter("minimum_projected_ground_points")
+        )
+        visibility_probability = _projection_visibility_probability(
+            len(visible_ground_points),
+            minimum_projected_points,
+        )
+        rejection_reason = _negative_update_rejection_reason(
+            rgb_available="rgb" in fresh,
+            depth_available="depth" in fresh,
+            point_cloud_available="point_cloud" in fresh,
+            projected_ground_point_count=len(visible_ground_points),
+            minimum_projected_ground_points=minimum_projected_points,
+            observation_quality=self._predicted_observation_quality(),
+            minimum_observation_quality=float(
+                self._parameter("minimum_negative_observation_quality")
+            ),
+        )
         frame = SearchSensorFrame(
             timestamp_s=now,
             viewpoint=self._actual_viewpoint(),
@@ -413,9 +538,14 @@ class GsiSearchNode(Node):
             detections=self._target_detections(),
             visible_ground_points_xy=visible_ground_points,
             observation_quality=self._observation_quality(),
-            travel_time_s=max(0.0, now - self._command_start_time_s),
+            visibility_probability=visibility_probability,
+            negative_update_strength=(0.0 if rejection_reason else 1.0),
+            negative_update_rejection_reason=rejection_reason,
+            travel_time_s=max(0.0, now - self._observation_checkpoint_time_s),
             travel_distance_m=max(
-                0.0, self._odometry_distance_m - self._command_start_distance_m
+                0.0,
+                self._odometry_distance_m
+                - self._observation_checkpoint_distance_m,
             ),
             energy_used=self._energy_used(),
             sensor_timestamps_s={
@@ -443,7 +573,87 @@ class GsiSearchNode(Node):
             },
         )
         observation = self._adapter.adapt(frame, self._commanded_viewpoint)
-        state = self._session.record_observation(observation)
+        replan_reason = None
+        replan_diagnostics: Dict[str, object] = {}
+        if transit:
+            prior_belief = dict(self._session.state.belief)
+            prior_utility = _selected_utility(
+                self._session.pending_policy_metadata
+            )
+            new_cells = _new_visible_cell_count(
+                self._session.state.observed_cell_quality,
+                observation.visible_cell_ids,
+                observation.observation_quality,
+            )
+            if (
+                trigger == "negative_detection_in_transit"
+                and new_cells
+                < int(self._parameter("transit_negative_min_new_cells"))
+            ):
+                return False
+            state = self._session.record_transit_observation(
+                observation,
+                replan=False,
+            )
+            belief_update = self._session.belief_updates[-1]
+            next_utility = _best_policy_utility(self._session.policy, state)
+            reward_change = _relative_reward_change(prior_utility, next_utility)
+            last_replan_time = state.policy_metadata.get(
+                "last_replan_timestamp_s"
+            )
+            time_since_replan = (
+                max(0.0, now - float(last_replan_time))
+                if last_replan_time is not None
+                else max(0.0, now - self._command_start_time_s)
+            )
+            trajectory_valid = _policy_viewpoint_is_viable(
+                self._session.policy,
+                state,
+                self._commanded_viewpoint,
+            )
+            belief_total_variation = _belief_total_variation(
+                prior_belief,
+                state.belief,
+            )
+            replan_reason = _replan_reason(
+                positive_detection=trigger == "positive_detection_in_transit",
+                belief_total_variation=belief_total_variation,
+                kl_divergence_nats=belief_update.kl_divergence_nats,
+                trajectory_valid=trajectory_valid,
+                expected_reward_change=reward_change,
+                time_since_replan_s=time_since_replan,
+                minimum_interval_s=float(
+                    self._parameter("replan_min_interval_s")
+                ),
+                belief_total_variation_threshold=float(self._parameter(
+                    "replan_belief_total_variation_threshold"
+                )),
+                kl_divergence_threshold_nats=float(self._parameter(
+                    "replan_kl_divergence_threshold_nats"
+                )),
+                expected_reward_change_threshold=float(self._parameter(
+                    "replan_expected_reward_change_threshold"
+                )),
+            )
+            replan_diagnostics = {
+                "belief_total_variation": belief_total_variation,
+                "kl_divergence_nats": belief_update.kl_divergence_nats,
+                "trajectory_valid": trajectory_valid,
+                "prior_expected_reward": prior_utility,
+                "next_expected_reward": next_utility,
+                "expected_reward_change": reward_change,
+                "time_since_replan_s": time_since_replan,
+            }
+            if replan_reason is not None:
+                self._session.request_replan(
+                    replan_reason,
+                    timestamp_s=now,
+                    diagnostics=replan_diagnostics,
+                )
+                state = self._session.state
+        else:
+            new_cells = None
+            state = self._session.record_observation(observation)
         self._write_trace("observation", {
             "step_index": state.step_index,
             "observation": observation.to_dict(),
@@ -452,25 +662,37 @@ class GsiSearchNode(Node):
                 self._session.policy_decisions[-1]
                 if self._session.policy_decisions else None
             ),
+            "transit_replan": transit and replan_reason is not None,
+            "replan_reason": replan_reason,
+            "replan_diagnostics": replan_diagnostics,
+            "new_visible_cell_count": new_cells,
         })
         self.get_logger().info(
-            f"Recorded viewpoint {state.step_index} via {trigger}; "
+            f"Recorded {'transit evidence' if transit else 'viewpoint'} "
+            f"{state.step_index} via {trigger}; "
             f"detections={len(observation.detections)}, "
             f"visible_cells={len(observation.visible_cell_ids)}, "
             f"ground_points={len(visible_ground_points)}, "
-            f"quality={observation.observation_quality:.3f}"
+            f"quality={observation.observation_quality:.3f}, "
+            f"visibility={observation.visibility_probability:.3f}, "
+            f"negative_strength={observation.negative_update_strength:.3f}, "
+            f"negative_rejection={observation.negative_update_rejection_reason}"
         )
-        self._commanded_viewpoint = None
-        self._settled_since_s = None
+        self._observation_checkpoint_time_s = now
+        self._observation_checkpoint_distance_m = self._odometry_distance_m
+        self._observation_checkpoint_battery = self._battery_percentage
+        if not transit or replan_reason is not None or self._session.completed:
+            self._commanded_viewpoint = None
+            self._settled_since_s = None
         if self._session.completed:
             self._publish_outcome()
+        return True
 
     def _can_record_positive_detection_in_transit(self) -> bool:
         if (
             self._transit_detection_recorded
             or not bool(self._parameter("record_first_positive_detection_in_transit"))
             or self._session is None
-            or self._session.state.step_index > 0
             or not self._required_sensors_are_fresh()
         ):
             return False
@@ -481,11 +703,59 @@ class GsiSearchNode(Node):
             float(self._parameter("minimum_observation_quality")),
             float(self._parameter("transit_detection_min_observation_quality")),
         )
-        return (
+        sensor_gate_passed = (
             self._dynamic_sensor_receipt_skew_s() <= maximum_skew
             and self._predicted_observation_quality()
             >= minimum_quality
-            and bool(self._target_detections())
+        )
+        if not sensor_gate_passed:
+            return False
+        criteria = self._session.state.task.success_criteria
+        return _can_use_transit_detection_evidence(
+            self._session.state.observations,
+            self._target_detections(),
+            minimum_confidence=criteria.min_confidence,
+            maximum_localization_error_m=criteria.max_localization_error_m,
+        )
+
+    def _can_record_negative_detection_in_transit(self) -> bool:
+        if (
+            not bool(self._parameter("record_negative_observations_in_transit"))
+            or self._session is None
+            or self._commanded_viewpoint is None
+            or not self._required_sensors_are_fresh()
+            or self._is_settled_at(self._commanded_viewpoint)
+        ):
+            return False
+        actual = self._actual_viewpoint()
+        if actual.z < (
+            float(self._parameter("flight_altitude_m"))
+            - float(self._parameter("position_tolerance_m"))
+        ):
+            return False
+        if (
+            self._now_s() - self._observation_checkpoint_time_s
+            < float(self._parameter("transit_negative_min_interval_s"))
+            or self._odometry_distance_m - self._observation_checkpoint_distance_m
+            < float(self._parameter("transit_negative_min_distance_m"))
+            or self._predicted_observation_quality()
+            < float(self._parameter("minimum_observation_quality"))
+        ):
+            return False
+        criteria = self._session.state.task.success_criteria
+        if _has_acceptable_detection(
+            self._target_detections(),
+            minimum_confidence=criteria.min_confidence,
+            maximum_localization_error_m=criteria.max_localization_error_m,
+        ):
+            return False
+        return not any(
+            _has_acceptable_detection(
+                observation.detections,
+                minimum_confidence=criteria.min_confidence,
+                maximum_localization_error_m=criteria.max_localization_error_m,
+            )
+            for observation in self._session.state.observations
         )
 
     def _dynamic_sensor_receipt_skew_s(self) -> float:
@@ -496,6 +766,16 @@ class GsiSearchNode(Node):
             names.append("point_cloud")
         receipt_times = [self._latest[name][2] for name in names]
         return max(receipt_times) - min(receipt_times)
+
+    def _time_budget_exhausted(self) -> bool:
+        assert self._session is not None
+        elapsed_time_s = self._session.state.elapsed_time_s
+        if self._commanded_viewpoint is not None:
+            elapsed_time_s += max(
+                0.0,
+                self._now_s() - self._observation_checkpoint_time_s,
+            )
+        return self._session.expire_time_budget(elapsed_time_s)
 
     def _predicted_observation_quality(self) -> float:
         receipt_times = [
@@ -651,9 +931,15 @@ class GsiSearchNode(Node):
         )
 
     def _energy_used(self) -> float:
-        if self._command_start_battery is None or self._battery_percentage is None:
+        if (
+            self._observation_checkpoint_battery is None
+            or self._battery_percentage is None
+        ):
             return 0.0
-        fraction = max(0.0, self._command_start_battery - self._battery_percentage)
+        fraction = max(
+            0.0,
+            self._observation_checkpoint_battery - self._battery_percentage,
+        )
         capacity = float(self._parameter("battery_capacity_wh"))
         return fraction * capacity if capacity > 0 else fraction
 
@@ -741,6 +1027,195 @@ def _quality_after_sensor_skew(
         raise ValueError("maximum_sensor_skew_s must be positive")
     skew_ratio = min(1.0, max(0.0, sensor_skew_s) / maximum_sensor_skew_s)
     return max(0.0, min(1.0, base_quality)) * (1.0 - skew_ratio)
+
+
+def _projection_visibility_probability(
+    projected_ground_point_count: int,
+    minimum_projected_ground_points: int,
+) -> float:
+    if minimum_projected_ground_points <= 0:
+        raise ValueError("minimum_projected_ground_points must be positive")
+    return min(
+        1.0,
+        max(0, projected_ground_point_count) / minimum_projected_ground_points,
+    )
+
+
+def _negative_update_rejection_reason(
+    *,
+    rgb_available: bool,
+    depth_available: bool,
+    point_cloud_available: bool,
+    projected_ground_point_count: int,
+    minimum_projected_ground_points: int,
+    observation_quality: float,
+    minimum_observation_quality: float,
+) -> Optional[str]:
+    if not rgb_available or not depth_available:
+        return "insufficient_rgbd_observation"
+    if not point_cloud_available or projected_ground_point_count <= 0:
+        return "no_valid_point_projection"
+    if projected_ground_point_count < minimum_projected_ground_points:
+        return "blocked_view"
+    if observation_quality < minimum_observation_quality:
+        return "insufficient_observation_quality"
+    return None
+
+
+def _belief_total_variation(
+    prior: Mapping[str, float],
+    posterior: Mapping[str, float],
+) -> float:
+    return 0.5 * sum(
+        abs(float(posterior.get(key, 0.0)) - float(prior.get(key, 0.0)))
+        for key in set(prior) | set(posterior)
+    )
+
+
+def _semantic_visibility_probability(labels: Iterable[str]) -> float:
+    normalized = " ".join(_normalize_label(label) for label in labels)
+    if any(token in normalized for token in ("woodland", "forest", "vegetation")):
+        return 0.35
+    if any(token in normalized for token in ("passage", "alley", "corridor")):
+        return 0.5
+    if any(token in normalized for token in ("buildingfrontage", "streetedge")):
+        return 0.65
+    if any(token in normalized for token in ("road", "parking", "plaza", "open")):
+        return 0.9
+    return 0.75
+
+
+def _semantic_risk_score(labels: Iterable[str]) -> float:
+    normalized = " ".join(_normalize_label(label) for label in labels)
+    if any(token in normalized for token in ("woodland", "forest", "vegetation")):
+        return 0.7
+    if any(token in normalized for token in ("passage", "alley", "corridor")):
+        return 0.5
+    if any(token in normalized for token in ("building", "frontage")):
+        return 0.35
+    return 0.1
+
+
+def _selected_utility(metadata: Mapping[str, object]) -> Optional[float]:
+    score = metadata.get("selected_viewpoint_score")
+    if not isinstance(score, Mapping):
+        return None
+    value = score.get("utility")
+    if value is None:
+        return None
+    utility = float(value)
+    return utility if math.isfinite(utility) else None
+
+
+def _best_policy_utility(policy: object, state: object) -> Optional[float]:
+    viewpoint = policy.select_next(state)
+    if viewpoint is None:
+        return None
+    return _selected_utility(policy.decision_metadata(state, viewpoint))
+
+
+def _relative_reward_change(
+    previous: Optional[float],
+    current: Optional[float],
+) -> float:
+    if previous is None or current is None:
+        return 0.0
+    return abs(current - previous) / max(abs(previous), 1e-9)
+
+
+def _policy_viewpoint_is_viable(
+    policy: object,
+    state: object,
+    viewpoint: Viewpoint,
+) -> bool:
+    predicate = getattr(policy, "is_viewpoint_viable", None)
+    if predicate is not None:
+        return bool(predicate(state, viewpoint))
+    return any(item.key == viewpoint.key for item in policy.plan(state))
+
+
+def _replan_reason(
+    *,
+    positive_detection: bool,
+    belief_total_variation: float,
+    kl_divergence_nats: float,
+    trajectory_valid: bool,
+    expected_reward_change: float,
+    time_since_replan_s: float,
+    minimum_interval_s: float,
+    belief_total_variation_threshold: float,
+    kl_divergence_threshold_nats: float,
+    expected_reward_change_threshold: float,
+) -> Optional[str]:
+    if positive_detection:
+        return "positive_detection"
+    if not trajectory_valid:
+        return "trajectory_invalid"
+    if time_since_replan_s < minimum_interval_s:
+        return None
+    if belief_total_variation >= belief_total_variation_threshold:
+        return "belief_distribution_changed"
+    if kl_divergence_nats >= kl_divergence_threshold_nats:
+        return "kl_divergence_exceeded"
+    if expected_reward_change >= expected_reward_change_threshold:
+        return "expected_reward_changed"
+    return None
+
+
+def _can_use_transit_detection_evidence(
+    prior_observations: Iterable[object],
+    current_detections: Iterable[TargetDetection],
+    *,
+    minimum_confidence: float,
+    maximum_localization_error_m: Optional[float],
+) -> bool:
+    """Accept the first reliable positive on any flight leg.
+
+    Once positive evidence exists, the next confirmation remains gated on a
+    settled viewpoint so adjacent frames cannot satisfy both confirmations.
+    """
+
+    prior_positive = any(
+        _has_acceptable_detection(
+            observation.detections,
+            minimum_confidence=minimum_confidence,
+            maximum_localization_error_m=maximum_localization_error_m,
+        )
+        for observation in prior_observations
+    )
+    return not prior_positive and _has_acceptable_detection(
+        current_detections,
+        minimum_confidence=minimum_confidence,
+        maximum_localization_error_m=maximum_localization_error_m,
+    )
+
+
+def _has_acceptable_detection(
+    detections: Iterable[TargetDetection],
+    *,
+    minimum_confidence: float,
+    maximum_localization_error_m: Optional[float],
+) -> bool:
+    for detection in detections:
+        if detection.confidence < minimum_confidence:
+            continue
+        if maximum_localization_error_m is None:
+            return True
+        error = detection.attributes.get("localization_error_m")
+        if error is not None and float(error) <= maximum_localization_error_m:
+            return True
+    return False
+
+
+def _new_visible_cell_count(
+    observed_cell_quality: Mapping[str, float],
+    visible_cell_ids: Iterable[str],
+    observation_quality: float,
+) -> int:
+    return sum(
+        observation_quality > observed_cell_quality.get(cell_id, 0.0)
+        for cell_id in set(visible_cell_ids)
+    )
 
 
 def _viewpoint_dict(viewpoint: Viewpoint) -> Dict[str, float]:

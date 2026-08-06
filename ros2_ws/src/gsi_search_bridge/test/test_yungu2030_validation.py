@@ -118,6 +118,49 @@ def _classification_inputs():
 
 
 class TrialClassificationTests(unittest.TestCase):
+    def test_trial_manifest_falls_back_to_batch_local_copy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            batch = Path(directory)
+            trial = batch / "episodes" / "trial-1"
+            trial.mkdir(parents=True)
+            manifest = batch / "validation_manifest.json"
+            manifest.write_text("{}", encoding="utf-8")
+
+            resolved = validation._resolve_trial_manifest(
+                trial,
+                "/mnt/c/moved/batch/validation_manifest.json",
+            )
+
+            self.assertEqual(resolved, manifest)
+
+    def test_confirmation_observations_ignore_negative_transit_evidence(self):
+        observations = [
+            {
+                "detections": [],
+                "sensor_metadata": {
+                    "observation_trigger": "negative_detection_in_transit",
+                },
+            },
+            {
+                "detections": [{"label": "yellow-van"}],
+                "sensor_metadata": {
+                    "observation_trigger": "positive_detection_in_transit",
+                },
+            },
+            {
+                "detections": [{"label": "yellow-van"}],
+                "sensor_metadata": {"observation_trigger": "settled_viewpoint"},
+            },
+        ]
+
+        confirmations = validation._confirmation_observations(observations)
+
+        self.assertEqual(len(confirmations), 2)
+        self.assertEqual(
+            confirmations[1]["sensor_metadata"]["observation_trigger"],
+            "settled_viewpoint",
+        )
+
     def test_trial_classification_accepts_complete_contract(self):
         self.assertEqual(
             validation.classify_trial(**_classification_inputs()),

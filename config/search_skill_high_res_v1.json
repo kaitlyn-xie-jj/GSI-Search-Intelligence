@@ -1,0 +1,30 @@
+{
+  "profile_id": "search-skill-high-res-v1",
+  "baseline_reference": "search-skill-baseline-2026-08-05",
+  "camera": {
+    "profile_id": "high-resolution-camera-v1",
+    "assumed_resolution_px": [3840, 2160],
+    "detection_probability": 0.96,
+    "false_positive_probability": 0.005,
+    "effective_recognition_radius_m": 30.0,
+    "detection_confidence": 0.98,
+    "camera_and_compute_power_model_included": false
+  },
+  "policy": {
+    "implementation": "AdaptiveBeliefLookaheadPolicy",
+    "variant": "highres_d_frozen_weights",
+    "detection_weight": 1.0,
+    "information_gain_weight": 0.8,
+    "novelty_weight": 0.4,
+    "travel_weight": 0.12,
+    "recovery_reserve_actions": 0,
+    "confidence_gating_enabled": true
+  },
+  "validation": {
+    "status": "synthetic_held_out_validated_not_outdoor_validated",
+    "report": "results/search_skill_success_first/experiment_report.json",
+    "held_out_base_seed": 10,
+    "held_out_repetitions_per_condition": 20,
+    "condition_count": 24
+  }
+}

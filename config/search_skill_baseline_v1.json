@@ -1,0 +1,58 @@
+{
+  "schema_version": "gsi-search-skill-baseline-v1",
+  "baseline_id": "search-skill-baseline-2026-08-05",
+  "status": "frozen",
+  "branch": "Yungu-map-demo",
+  "source_revision": "692c322dd57f21ce73654a4fcb8502cfa574e5e5",
+  "source_revision_note": "The research implementation is an uncommitted working-tree snapshot on top of this revision.",
+  "methods": {
+    "A": {
+      "policy_name": "coverage",
+      "implementation": "CoveragePolicy",
+      "description": "Full-coverage lawn-mower route"
+    },
+    "B": {
+      "policy_name": "random",
+      "implementation": "RandomPolicy",
+      "description": "Seeded random candidate ordering"
+    },
+    "C": {
+      "policy_name": "active",
+      "implementation": "OriginalActiveSearchPolicy",
+      "confidence_gating_enabled": false,
+      "description": "Frozen original active-search score and legacy strong-negative belief update"
+    },
+    "D": {
+      "policy_name": "improved_active",
+      "implementation": "AdaptiveBeliefLookaheadPolicy",
+      "confidence_gating_enabled": true,
+      "description": "Confidence-gated, diversity-aware, budgeted horizon-2 active search"
+    }
+  },
+  "shared_benchmark": {
+    "map_size_m": [120.0, 100.0],
+    "grid_resolution_m": 20.0,
+    "speed_mps": 10.0,
+    "time_budget_s": 55.0,
+    "max_viewpoints": 10,
+    "environment_conditions": [
+      "open_area",
+      "street_edge",
+      "woodland",
+      "building_passage"
+    ],
+    "prior_conditions": ["correct", "wrong", "uniform"],
+    "sensor_conditions": ["normal", "reduced_quality"],
+    "seeds_per_condition": 20
+  },
+  "preserved_results": {
+    "pre_isolation_evaluation": "results/search_skill_acceptance/evaluation_report_pre_baseline_isolation.json",
+    "current_evaluation": "results/search_skill_acceptance/evaluation_report.json",
+    "yungu_four_position_batch": "results/yungu2030_robustness/20260805_optimized_policy_failed_four/batch_summary.json"
+  },
+  "change_policy": {
+    "immutable_methods": ["coverage", "random", "active"],
+    "development_method": "improved_active",
+    "required_attribution": "Any future algorithm change must be evaluated as a new improved_active variant or an explicit ablation; it must not alter methods A, B, or C."
+  }
+}

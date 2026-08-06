@@ -18,6 +18,18 @@ SUPPORTED_POLICIES = (
     "active",
     "adaptive_active",
     "lookahead_active",
+    "improved_active",
+    "hybrid_supervisor",
+    "success_constrained",
+)
+
+DEFAULT_POLICIES = (
+    "coverage",
+    "random",
+    "greedy_prior",
+    "active",
+    "adaptive_active",
+    "lookahead_active",
 )
 
 
@@ -72,7 +84,7 @@ class SearchBenchmarkScenario:
 class SearchBenchmarkConfig:
     """Shared policy, sensor, and resource settings for one benchmark suite."""
 
-    policy_names: Tuple[str, ...] = SUPPORTED_POLICIES
+    policy_names: Tuple[str, ...] = DEFAULT_POLICIES
     repetitions: int = 10
     base_seed: int = 0
     altitude_m: float = 30.0
@@ -101,6 +113,14 @@ class SearchBenchmarkConfig:
     distance_scale_mode: str = "fixed"
     verification_followup_limit: Optional[int] = None
     lookahead_discount_factor: float = 1.0
+    lookahead_candidate_limit: int = 16
+    exploitation_fraction: float = 0.3
+    exploration_fraction: float = 0.4
+    semantic_fraction: float = 0.3
+    frontier_fraction_within_exploration: float = 0.5
+    revisit_weight: float = 0.0
+    risk_weight: float = 0.0
+    completion_time_reserve_s: float = 0.0
     persistent_distractor_probability: float = 0.0
     false_alarm_correlation: float = 0.0
     correlated_false_alarm_shared_identity: bool = False
@@ -168,6 +188,22 @@ class SearchBenchmarkConfig:
             raise ValueError("verification_followup_limit must be positive")
         if not 0.0 <= self.lookahead_discount_factor <= 1.0:
             raise ValueError("lookahead_discount_factor must be within [0, 1]")
+        if self.lookahead_candidate_limit <= 0:
+            raise ValueError("lookahead_candidate_limit must be positive")
+        fractions = (
+            self.exploitation_fraction,
+            self.exploration_fraction,
+            self.semantic_fraction,
+        )
+        if any(not math.isfinite(value) or value < 0 for value in fractions):
+            raise ValueError("candidate pool fractions must be finite and non-negative")
+        if not math.isclose(sum(fractions), 1.0, abs_tol=1e-9):
+            raise ValueError("candidate pool fractions must sum to 1")
+        if not 0 <= self.frontier_fraction_within_exploration <= 1:
+            raise ValueError("frontier fraction must be within [0, 1]")
+        for name in ("revisit_weight", "risk_weight", "completion_time_reserve_s"):
+            if not math.isfinite(getattr(self, name)) or getattr(self, name) < 0:
+                raise ValueError(f"{name} must be finite and non-negative")
         if (
             not math.isfinite(self.localization_error_std_m)
             or self.localization_error_std_m < 0
@@ -229,6 +265,9 @@ class SearchEpisodeResult:
     correlated_false_alarm_count: int = 0
     independent_false_alarm_count: int = 0
     mean_localization_error_m: float = 0.0
+    replan_count: int = 0
+    belief_brier_score: float = 0.0
+    failure_category: str = "none"
     policy_trace: Tuple[Mapping[str, Any], ...] = ()
     belief_entropy_trace: Tuple[float, ...] = ()
     sensor_trace: Tuple[Mapping[str, Any], ...] = ()
@@ -242,6 +281,7 @@ class SearchEpisodeResult:
             self.persistent_distractor_count,
             self.correlated_false_alarm_count,
             self.independent_false_alarm_count,
+            self.replan_count,
         )
         if any(value < 0 for value in counts):
             raise ValueError("repetition and steps must not be negative")
@@ -253,6 +293,7 @@ class SearchEpisodeResult:
             "initial_entropy_nats",
             "final_entropy_nats",
             "mean_localization_error_m",
+            "belief_brier_score",
         ):
             if not math.isfinite(getattr(self, name)) or getattr(self, name) < 0:
                 raise ValueError(f"{name} must be finite and non-negative")

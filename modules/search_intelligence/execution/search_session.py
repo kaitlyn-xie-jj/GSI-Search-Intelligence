@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import replace
 from typing import Dict, Mapping, Optional, Tuple
 
 from ..belief import BayesianBeliefUpdater, BeliefMap, BeliefUpdate
@@ -81,6 +82,14 @@ class SearchSession:
     def policy_decisions(self) -> Tuple[Mapping[str, object], ...]:
         return tuple(dict(item) for item in self._policy_decisions)
 
+    @property
+    def pending_viewpoint(self) -> Optional[Viewpoint]:
+        return self._pending_viewpoint
+
+    @property
+    def pending_policy_metadata(self) -> Mapping[str, object]:
+        return dict(self._pending_policy_metadata)
+
     def remaining_plan(self) -> Tuple[Viewpoint, ...]:
         """Return policy viewpoints that have not yet produced observations."""
         return () if self.completed else self.policy.plan(self.state)
@@ -129,9 +138,142 @@ class SearchSession:
         if action_viewpoint_key != self._pending_viewpoint.key:
             raise ValueError("observation viewpoint does not match the pending policy action")
 
+        next_belief, next_metadata = self._apply_belief_update(
+            observation,
+            belief=belief,
+            policy_metadata={
+                **self._pending_policy_metadata,
+                **dict(policy_metadata or {}),
+            },
+        )
+
+        self.state = self.state.advance(
+            observation,
+            belief=next_belief,
+            policy_metadata=next_metadata,
+        )
+        self._pending_viewpoint = None
+        self._pending_policy_metadata = {}
+
+        self._finish_after_observation()
+        return self.state
+
+    def record_transit_observation(
+        self,
+        observation: SearchObservation,
+        *,
+        belief: Optional[Mapping[str, float]] = None,
+        policy_metadata: Optional[Mapping[str, object]] = None,
+        replan: bool = True,
+    ) -> SearchState:
+        """Apply en-route evidence without consuming a viewpoint budget slot."""
+        if self.completed:
+            raise RuntimeError("cannot record an observation after the search session completed")
+        if self._pending_viewpoint is None:
+            raise RuntimeError("next_viewpoint must be called before record_transit_observation")
+        action_viewpoint_key = observation.action_viewpoint_key or observation.viewpoint.key
+        if action_viewpoint_key != self._pending_viewpoint.key:
+            raise ValueError("observation viewpoint does not match the pending policy action")
+
+        next_belief, next_metadata = self._apply_belief_update(
+            observation,
+            belief=belief,
+            policy_metadata={
+                **self._pending_policy_metadata,
+                **dict(policy_metadata or {}),
+            },
+        )
+        self.state = self.state.observe_in_transit(
+            observation,
+            belief=next_belief,
+            policy_metadata=next_metadata,
+        )
+        if replan:
+            self._pending_viewpoint = None
+            self._pending_policy_metadata = {}
+
+        self._finish_after_observation()
+        if self.completed:
+            self._pending_viewpoint = None
+            self._pending_policy_metadata = {}
+        return self.state
+
+    def expire_time_budget(self, elapsed_time_s: float) -> bool:
+        """Finalize when wall-clock execution reaches the task time limit."""
+        if elapsed_time_s < 0:
+            raise ValueError("elapsed_time_s must not be negative")
+        if self.completed:
+            return True
+        limit = self.state.task.budget.time_limit_s
+        if limit is None or elapsed_time_s < limit:
+            return False
+        self.state = replace(self.state, elapsed_time_s=elapsed_time_s)
+        self.outcome = SearchOutcome.from_state(
+            self.state,
+            status=SearchOutcomeStatus.BUDGET_EXHAUSTED,
+            reason="time budget exhausted",
+        )
+        self._pending_viewpoint = None
+        self._pending_policy_metadata = {}
+        return True
+
+    def request_replan(
+        self,
+        reason: str,
+        *,
+        timestamp_s: float,
+        diagnostics: Optional[Mapping[str, object]] = None,
+    ) -> bool:
+        """Cancel the pending action and retain auditable replan metadata."""
+        if self.completed or self._pending_viewpoint is None:
+            return False
+        if not reason.strip():
+            raise ValueError("replan reason must not be empty")
+        metadata = dict(self.state.policy_metadata)
+        previous_time = metadata.get("last_replan_timestamp_s")
+        time_between = (
+            max(0.0, timestamp_s - float(previous_time))
+            if previous_time is not None else None
+        )
+        metadata.update({
+            "replan_count": int(metadata.get("replan_count", 0)) + 1,
+            "last_replan_reason": reason,
+            "last_replan_timestamp_s": timestamp_s,
+            "last_time_between_replans_s": time_between,
+            "last_replan_diagnostics": dict(diagnostics or {}),
+        })
+        self.state = replace(self.state, policy_metadata=metadata)
+        self._pending_viewpoint = None
+        self._pending_policy_metadata = {}
+        return True
+
+    def _finish_after_observation(self) -> None:
+        confirmed = self._confirmed_detections()
+        if confirmed:
+            self.outcome = SearchOutcome.from_state(
+                self.state,
+                status=SearchOutcomeStatus.FOUND,
+                reason="search success criteria met",
+                detections=confirmed,
+            )
+            return
+        budget = self.state.exhausted_budget
+        if budget is not None:
+            self.outcome = SearchOutcome.from_state(
+                self.state,
+                status=SearchOutcomeStatus.BUDGET_EXHAUSTED,
+                reason=f"{budget} budget exhausted",
+            )
+
+    def _apply_belief_update(
+        self,
+        observation: SearchObservation,
+        *,
+        belief: Optional[Mapping[str, float]],
+        policy_metadata: Mapping[str, object],
+    ) -> Tuple[Optional[Mapping[str, float]], Dict[str, object]]:
         next_belief = belief
-        next_metadata = dict(self._pending_policy_metadata)
-        next_metadata.update(policy_metadata or {})
+        next_metadata = dict(policy_metadata)
         if belief is None and self.belief_updater is not None:
             assert self.search_grid is not None
             update = self.belief_updater.update(
@@ -163,30 +305,7 @@ class SearchSession:
                 belief,
                 update_index=len(self._belief_updates),
             ).probabilities
-
-        self.state = self.state.advance(
-            observation,
-            belief=next_belief,
-            policy_metadata=next_metadata,
-        )
-        self._pending_viewpoint = None
-        self._pending_policy_metadata = {}
-
-        confirmed = self._confirmed_detections()
-        if confirmed:
-            self.outcome = SearchOutcome.from_state(
-                self.state,
-                status=SearchOutcomeStatus.FOUND,
-                reason="search success criteria met",
-                detections=confirmed,
-            )
-        elif self.state.exhausted_budget is not None:
-            self.outcome = SearchOutcome.from_state(
-                self.state,
-                status=SearchOutcomeStatus.BUDGET_EXHAUSTED,
-                reason=f"{self.state.exhausted_budget} budget exhausted",
-            )
-        return self.state
+        return next_belief, next_metadata
 
     def abort(self, reason: str) -> SearchOutcome:
         """Stop a session because execution was externally interrupted."""

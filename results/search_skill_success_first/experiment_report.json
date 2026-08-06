@@ -1,0 +1,912 @@
+{
+  "baseline_reference": {
+    "baseline_id": "search-skill-baseline-2026-08-05",
+    "baseline_modified": false
+  },
+  "camera_profile": {
+    "assumed_resolution_px": [
+      3840,
+      2160
+    ],
+    "detection_confidence": 0.98,
+    "detection_probability": 0.96,
+    "effective_recognition_radius_m": 30.0,
+    "false_positive_probability": 0.005,
+    "camera_and_compute_power_model_included": false,
+    "profile_id": "high-resolution-camera-v1",
+    "scope_note": "Synthetic sensor-profile assumption; it does not replace real-camera pixel, weather, motion-blur, calibration, or power validation."
+  },
+  "experiment_id": "success-first-high-resolution-camera-2026-08-06",
+  "held_out_validation": {
+    "condition_count": 24,
+    "e2_mode_usage": {
+      "action_fraction_by_mode": {
+        "active_search": 1.0
+      },
+      "actions_by_mode": {
+        "active_search": 3311
+      },
+      "mean_switches_per_episode": 0.0
+    },
+    "episodes_per_method": 480,
+    "hardware_effect_D_high_res_vs_D_current": {
+      "brier_ratio": 0.683229076831232,
+      "candidate_only_successes": 97,
+      "reference_only_successes": 14,
+      "matched_outcomes": 369,
+      "mean_total_distance_ratio": 0.8146592985753037,
+      "pair_count": 480,
+      "replan_ratio": 0.9297208538587848,
+      "success_per_km_ratio": 1.9350284120560788,
+      "success_rate_delta": 0.17291666666666666,
+      "successful_detection_distance_ratio": 0.8923343456844263,
+      "successful_detection_time_ratio": 0.8988067805765599
+    },
+    "methods": {
+      "D_current_camera": {
+        "belief_calibration_brier": {
+          "ci95_high": 0.02211753090133084,
+          "ci95_low": 0.019177124684775747,
+          "mean": 0.020647327793053293,
+          "sample_count": 480
+        },
+        "distance_per_success_m": 1196.8544872743864,
+        "energy_per_success": 72.08230769705266,
+        "episode_count": 480,
+        "failure_categories": {
+          "budget_exhausted_before_target_region": 19,
+          "none": 144,
+          "occluded": 165,
+          "sensor_miss": 119,
+          "target_region_unsearched": 33
+        },
+        "mean_detection_distance_m": {
+          "ci95_high": 208.94799894034014,
+          "ci95_low": 178.254461538177,
+          "mean": 193.60123023925857,
+          "sample_count": 144
+        },
+        "mean_detection_time_s": {
+          "ci95_high": 25.936944390197326,
+          "ci95_low": 22.297190546543277,
+          "mean": 24.1170674683703,
+          "sample_count": 144
+        },
+        "mean_total_distance_m": {
+          "ci95_high": 369.85666433113533,
+          "ci95_low": 348.2560280334965,
+          "mean": 359.0563461823159,
+          "sample_count": 480
+        },
+        "replans": {
+          "ci95_high": 6.535051175491054,
+          "ci95_low": 6.152448824508946,
+          "mean": 6.34375,
+          "sample_count": 480
+        },
+        "restricted_mean_search_time_s": 43.249384618231595,
+        "success_per_km": 0.8355234580582257,
+        "success_rate": {
+          "ci95_high": 0.34103911266422826,
+          "ci95_low": 0.2589608873357717,
+          "mean": 0.3,
+          "sample_count": 480
+        },
+        "worst_case_scenario_success_rate": 0.0
+      },
+      "D_high_res_camera": {
+        "belief_calibration_brier": {
+          "ci95_high": 0.015615493057625036,
+          "ci95_low": 0.012598216356534247,
+          "mean": 0.014106854707079642,
+          "sample_count": 480
+        },
+        "distance_per_success_m": 618.5203689090331,
+        "energy_per_success": 38.218969987301875,
+        "episode_count": 480,
+        "failure_categories": {
+          "budget_exhausted_before_target_region": 1,
+          "none": 227,
+          "occluded": 134,
+          "sensor_miss": 117,
+          "target_region_unsearched": 1
+        },
+        "mean_detection_distance_m": {
+          "ci95_high": 184.08937839445068,
+          "ci95_low": 161.42467582404683,
+          "mean": 172.75702710924875,
+          "sample_count": 227
+        },
+        "mean_detection_time_s": {
+          "ci95_high": 23.069045960918093,
+          "ci95_low": 20.284121575469104,
+          "mean": 21.6765837681936,
+          "sample_count": 227
+        },
+        "mean_total_distance_m": {
+          "ci95_high": 304.3632674421164,
+          "ci95_low": 280.6539148176774,
+          "mean": 292.5085911298969,
+          "sample_count": 480
+        },
+        "replans": {
+          "ci95_high": 6.152268723214794,
+          "ci95_low": 5.643564610118538,
+          "mean": 5.897916666666666,
+          "sample_count": 480
+        },
+        "restricted_mean_search_time_s": 36.14877577965636,
+        "success_per_km": 1.6167616302820123,
+        "success_rate": {
+          "ci95_high": 0.5176282723422887,
+          "ci95_low": 0.42820506099104455,
+          "mean": 0.47291666666666665,
+          "sample_count": 480
+        },
+        "worst_case_scenario_success_rate": 0.05
+      },
+      "E2_tuned_high_res": {
+        "belief_calibration_brier": {
+          "ci95_high": 0.015615493057625036,
+          "ci95_low": 0.012598216356534247,
+          "mean": 0.014106854707079642,
+          "sample_count": 480
+        },
+        "distance_per_success_m": 618.5203689090331,
+        "energy_per_success": 38.218969987301875,
+        "episode_count": 480,
+        "failure_categories": {
+          "budget_exhausted_before_target_region": 1,
+          "none": 227,
+          "occluded": 134,
+          "sensor_miss": 117,
+          "target_region_unsearched": 1
+        },
+        "mean_detection_distance_m": {
+          "ci95_high": 184.08937839445068,
+          "ci95_low": 161.42467582404683,
+          "mean": 172.75702710924875,
+          "sample_count": 227
+        },
+        "mean_detection_time_s": {
+          "ci95_high": 23.069045960918093,
+          "ci95_low": 20.284121575469104,
+          "mean": 21.6765837681936,
+          "sample_count": 227
+        },
+        "mean_total_distance_m": {
+          "ci95_high": 304.3632674421164,
+          "ci95_low": 280.6539148176774,
+          "mean": 292.5085911298969,
+          "sample_count": 480
+        },
+        "replans": {
+          "ci95_high": 6.152268723214794,
+          "ci95_low": 5.643564610118538,
+          "mean": 5.897916666666666,
+          "sample_count": 480
+        },
+        "restricted_mean_search_time_s": 36.14877577965636,
+        "success_per_km": 1.6167616302820123,
+        "success_rate": {
+          "ci95_high": 0.5176282723422887,
+          "ci95_low": 0.42820506099104455,
+          "mean": 0.47291666666666665,
+          "sample_count": 480
+        },
+        "worst_case_scenario_success_rate": 0.05
+      }
+    },
+    "policy_effect_E2_vs_D_high_res": {
+      "brier_ratio": 1.0,
+      "candidate_only_successes": 0,
+      "reference_only_successes": 0,
+      "matched_outcomes": 480,
+      "mean_total_distance_ratio": 1.0,
+      "pair_count": 480,
+      "replan_ratio": 1.0,
+      "success_per_km_ratio": 1.0,
+      "success_rate_delta": 0.0,
+      "successful_detection_distance_ratio": 1.0,
+      "successful_detection_time_ratio": 1.0
+    },
+    "promotion_decision": {
+      "decision": "DO_NOT_PROMOTE_E2",
+      "resource_improved_at_equal_success": false,
+      "success_improved": false,
+      "success_non_decreasing": true,
+      "worst_case_non_decreasing": true
+    },
+    "scenario_results": [
+      {
+        "environment": "open_area",
+        "prior_condition": "correct",
+        "scenario_id": "open_area__correct__normal",
+        "sensor_condition": "normal",
+        "success_rate": {
+          "D_current_camera": 0.95,
+          "D_high_res_camera": 1.0,
+          "E2_tuned_high_res": 1.0
+        }
+      },
+      {
+        "environment": "open_area",
+        "prior_condition": "correct",
+        "scenario_id": "open_area__correct__reduced_quality",
+        "sensor_condition": "reduced_quality",
+        "success_rate": {
+          "D_current_camera": 0.35,
+          "D_high_res_camera": 0.75,
+          "E2_tuned_high_res": 0.75
+        }
+      },
+      {
+        "environment": "open_area",
+        "prior_condition": "wrong",
+        "scenario_id": "open_area__wrong__normal",
+        "sensor_condition": "normal",
+        "success_rate": {
+          "D_current_camera": 0.85,
+          "D_high_res_camera": 0.95,
+          "E2_tuned_high_res": 0.95
+        }
+      },
+      {
+        "environment": "open_area",
+        "prior_condition": "wrong",
+        "scenario_id": "open_area__wrong__reduced_quality",
+        "sensor_condition": "reduced_quality",
+        "success_rate": {
+          "D_current_camera": 0.45,
+          "D_high_res_camera": 0.85,
+          "E2_tuned_high_res": 0.85
+        }
+      },
+      {
+        "environment": "open_area",
+        "prior_condition": "uniform",
+        "scenario_id": "open_area__uniform__normal",
+        "sensor_condition": "normal",
+        "success_rate": {
+          "D_current_camera": 0.85,
+          "D_high_res_camera": 0.95,
+          "E2_tuned_high_res": 0.95
+        }
+      },
+      {
+        "environment": "open_area",
+        "prior_condition": "uniform",
+        "scenario_id": "open_area__uniform__reduced_quality",
+        "sensor_condition": "reduced_quality",
+        "success_rate": {
+          "D_current_camera": 0.4,
+          "D_high_res_camera": 0.55,
+          "E2_tuned_high_res": 0.55
+        }
+      },
+      {
+        "environment": "street_edge",
+        "prior_condition": "correct",
+        "scenario_id": "street_edge__correct__normal",
+        "sensor_condition": "normal",
+        "success_rate": {
+          "D_current_camera": 0.75,
+          "D_high_res_camera": 1.0,
+          "E2_tuned_high_res": 1.0
+        }
+      },
+      {
+        "environment": "street_edge",
+        "prior_condition": "correct",
+        "scenario_id": "street_edge__correct__reduced_quality",
+        "sensor_condition": "reduced_quality",
+        "success_rate": {
+          "D_current_camera": 0.5,
+          "D_high_res_camera": 0.75,
+          "E2_tuned_high_res": 0.75
+        }
+      },
+      {
+        "environment": "street_edge",
+        "prior_condition": "wrong",
+        "scenario_id": "street_edge__wrong__normal",
+        "sensor_condition": "normal",
+        "success_rate": {
+          "D_current_camera": 0.15,
+          "D_high_res_camera": 0.7,
+          "E2_tuned_high_res": 0.7
+        }
+      },
+      {
+        "environment": "street_edge",
+        "prior_condition": "wrong",
+        "scenario_id": "street_edge__wrong__reduced_quality",
+        "sensor_condition": "reduced_quality",
+        "success_rate": {
+          "D_current_camera": 0.05,
+          "D_high_res_camera": 0.2,
+          "E2_tuned_high_res": 0.2
+        }
+      },
+      {
+        "environment": "street_edge",
+        "prior_condition": "uniform",
+        "scenario_id": "street_edge__uniform__normal",
+        "sensor_condition": "normal",
+        "success_rate": {
+          "D_current_camera": 0.6,
+          "D_high_res_camera": 0.8,
+          "E2_tuned_high_res": 0.8
+        }
+      },
+      {
+        "environment": "street_edge",
+        "prior_condition": "uniform",
+        "scenario_id": "street_edge__uniform__reduced_quality",
+        "sensor_condition": "reduced_quality",
+        "success_rate": {
+          "D_current_camera": 0.25,
+          "D_high_res_camera": 0.4,
+          "E2_tuned_high_res": 0.4
+        }
+      },
+      {
+        "environment": "woodland",
+        "prior_condition": "correct",
+        "scenario_id": "woodland__correct__normal",
+        "sensor_condition": "normal",
+        "success_rate": {
+          "D_current_camera": 0.2,
+          "D_high_res_camera": 0.6,
+          "E2_tuned_high_res": 0.6
+        }
+      },
+      {
+        "environment": "woodland",
+        "prior_condition": "correct",
+        "scenario_id": "woodland__correct__reduced_quality",
+        "sensor_condition": "reduced_quality",
+        "success_rate": {
+          "D_current_camera": 0.1,
+          "D_high_res_camera": 0.15,
+          "E2_tuned_high_res": 0.15
+        }
+      },
+      {
+        "environment": "woodland",
+        "prior_condition": "wrong",
+        "scenario_id": "woodland__wrong__normal",
+        "sensor_condition": "normal",
+        "success_rate": {
+          "D_current_camera": 0.2,
+          "D_high_res_camera": 0.1,
+          "E2_tuned_high_res": 0.1
+        }
+      },
+      {
+        "environment": "woodland",
+        "prior_condition": "wrong",
+        "scenario_id": "woodland__wrong__reduced_quality",
+        "sensor_condition": "reduced_quality",
+        "success_rate": {
+          "D_current_camera": 0.0,
+          "D_high_res_camera": 0.15,
+          "E2_tuned_high_res": 0.15
+        }
+      },
+      {
+        "environment": "woodland",
+        "prior_condition": "uniform",
+        "scenario_id": "woodland__uniform__normal",
+        "sensor_condition": "normal",
+        "success_rate": {
+          "D_current_camera": 0.15,
+          "D_high_res_camera": 0.5,
+          "E2_tuned_high_res": 0.5
+        }
+      },
+      {
+        "environment": "woodland",
+        "prior_condition": "uniform",
+        "scenario_id": "woodland__uniform__reduced_quality",
+        "sensor_condition": "reduced_quality",
+        "success_rate": {
+          "D_current_camera": 0.1,
+          "D_high_res_camera": 0.25,
+          "E2_tuned_high_res": 0.25
+        }
+      },
+      {
+        "environment": "building_passage",
+        "prior_condition": "correct",
+        "scenario_id": "building_passage__correct__normal",
+        "sensor_condition": "normal",
+        "success_rate": {
+          "D_current_camera": 0.15,
+          "D_high_res_camera": 0.25,
+          "E2_tuned_high_res": 0.25
+        }
+      },
+      {
+        "environment": "building_passage",
+        "prior_condition": "correct",
+        "scenario_id": "building_passage__correct__reduced_quality",
+        "sensor_condition": "reduced_quality",
+        "success_rate": {
+          "D_current_camera": 0.0,
+          "D_high_res_camera": 0.05,
+          "E2_tuned_high_res": 0.05
+        }
+      },
+      {
+        "environment": "building_passage",
+        "prior_condition": "wrong",
+        "scenario_id": "building_passage__wrong__normal",
+        "sensor_condition": "normal",
+        "success_rate": {
+          "D_current_camera": 0.1,
+          "D_high_res_camera": 0.1,
+          "E2_tuned_high_res": 0.1
+        }
+      },
+      {
+        "environment": "building_passage",
+        "prior_condition": "wrong",
+        "scenario_id": "building_passage__wrong__reduced_quality",
+        "sensor_condition": "reduced_quality",
+        "success_rate": {
+          "D_current_camera": 0.0,
+          "D_high_res_camera": 0.05,
+          "E2_tuned_high_res": 0.05
+        }
+      },
+      {
+        "environment": "building_passage",
+        "prior_condition": "uniform",
+        "scenario_id": "building_passage__uniform__normal",
+        "sensor_condition": "normal",
+        "success_rate": {
+          "D_current_camera": 0.0,
+          "D_high_res_camera": 0.15,
+          "E2_tuned_high_res": 0.15
+        }
+      },
+      {
+        "environment": "building_passage",
+        "prior_condition": "uniform",
+        "scenario_id": "building_passage__uniform__reduced_quality",
+        "sensor_condition": "reduced_quality",
+        "success_rate": {
+          "D_current_camera": 0.05,
+          "D_high_res_camera": 0.1,
+          "E2_tuned_high_res": 0.1
+        }
+      }
+    ],
+    "seed_block": {
+      "base_seed": 10,
+      "repetitions": 20
+    },
+    "total_episode_count": 1440
+  },
+  "objective_order": [
+    "success_rate",
+    "worst_case_success_rate",
+    "success_per_km",
+    "distance_per_success"
+  ],
+  "schema_version": "gsi-search-skill-success-first-v1",
+  "tuning": {
+    "candidate_count": 6,
+    "results": [
+      {
+        "lexicographic_rank_key": [
+          0.5166666666666667,
+          0.0,
+          1.8272952946264716,
+          -547.2569228086455
+        ],
+        "metrics": {
+          "belief_calibration_brier": {
+            "ci95_high": 0.014529877501834067,
+            "ci95_low": 0.008848257220660655,
+            "mean": 0.011689067361247361,
+            "sample_count": 120
+          },
+          "distance_per_success_m": 547.2569228086455,
+          "energy_per_success": 33.96768485010969,
+          "episode_count": 120,
+          "failure_categories": {
+            "none": 62,
+            "occluded": 30,
+            "sensor_miss": 28
+          },
+          "mean_detection_distance_m": {
+            "ci95_high": 198.83669603692147,
+            "ci95_low": 157.03568531979357,
+            "mean": 177.93619067835752,
+            "sample_count": 62
+          },
+          "mean_detection_time_s": {
+            "ci95_high": 25.003233738679377,
+            "ci95_low": 19.84206891312116,
+            "mean": 22.42265132590027,
+            "sample_count": 62
+          },
+          "mean_total_distance_m": {
+            "ci95_high": 305.72044850139116,
+            "ci95_low": 259.77837173420914,
+            "mean": 282.74941011780015,
+            "sample_count": 120
+          },
+          "replans": {
+            "ci95_high": 6.322309210632975,
+            "ci95_low": 5.327690789367026,
+            "mean": 5.825,
+            "sample_count": 120
+          },
+          "restricted_mean_search_time_s": 35.09994101178002,
+          "success_per_km": 1.8272952946264716,
+          "success_rate": {
+            "ci95_high": 0.6064531963636801,
+            "ci95_low": 0.42688013696965327,
+            "mean": 0.5166666666666667,
+            "sample_count": 120
+          },
+          "worst_case_scenario_success_rate": 0.0
+        },
+        "variant": {
+          "detection_weight": 1.0,
+          "information_gain_weight": 0.8,
+          "novelty_weight": 0.4,
+          "recovery_novelty_weight": 1.0,
+          "recovery_reserve_actions": 0,
+          "required_quality_coverage": 0.6,
+          "travel_weight": 0.12,
+          "variant_id": "highres_d_frozen_weights"
+        }
+      },
+      {
+        "lexicographic_rank_key": [
+          0.5,
+          0.0,
+          1.738962125684347,
+          -575.0556525815433
+        ],
+        "metrics": {
+          "belief_calibration_brier": {
+            "ci95_high": 0.015302523846680974,
+            "ci95_low": 0.009473088202653471,
+            "mean": 0.012387806024667223,
+            "sample_count": 120
+          },
+          "distance_per_success_m": 575.0556525815433,
+          "energy_per_success": 35.619449295743834,
+          "episode_count": 120,
+          "failure_categories": {
+            "none": 60,
+            "occluded": 38,
+            "sensor_miss": 22
+          },
+          "mean_detection_distance_m": {
+            "ci95_high": 195.26013350782543,
+            "ci95_low": 154.52563796999263,
+            "mean": 174.89288573890903,
+            "sample_count": 60
+          },
+          "mean_detection_time_s": {
+            "ci95_high": 24.516975846995816,
+            "ci95_low": 19.52826796745266,
+            "mean": 22.022621907224238,
+            "sample_count": 60
+          },
+          "mean_total_distance_m": {
+            "ci95_high": 310.8217255945782,
+            "ci95_low": 264.23392698696523,
+            "mean": 287.5278262907717,
+            "sample_count": 120
+          },
+          "replans": {
+            "ci95_high": 6.366280844605389,
+            "ci95_low": 5.367052488727944,
+            "mean": 5.866666666666666,
+            "sample_count": 120
+          },
+          "restricted_mean_search_time_s": 35.619449295743834,
+          "success_per_km": 1.738962125684347,
+          "success_rate": {
+            "ci95_high": 0.5898364527087647,
+            "ci95_low": 0.4101635472912353,
+            "mean": 0.5,
+            "sample_count": 120
+          },
+          "worst_case_scenario_success_rate": 0.0
+        },
+        "variant": {
+          "detection_weight": 1.4,
+          "information_gain_weight": 0.65,
+          "novelty_weight": 0.4,
+          "recovery_novelty_weight": 1.0,
+          "recovery_reserve_actions": 0,
+          "required_quality_coverage": 0.6,
+          "travel_weight": 0.08,
+          "variant_id": "detection_priority"
+        }
+      },
+      {
+        "lexicographic_rank_key": [
+          0.5,
+          0.0,
+          1.7373333298790445,
+          -575.5947824184212
+        ],
+        "metrics": {
+          "belief_calibration_brier": {
+            "ci95_high": 0.01578913227919193,
+            "ci95_low": 0.009937165476794338,
+            "mean": 0.012863148877993134,
+            "sample_count": 120
+          },
+          "distance_per_success_m": 575.5947824184212,
+          "energy_per_success": 35.588072454254394,
+          "episode_count": 120,
+          "failure_categories": {
+            "none": 60,
+            "occluded": 37,
+            "sensor_miss": 23
+          },
+          "mean_detection_distance_m": {
+            "ci95_high": 192.11059668676333,
+            "ci95_low": 152.23365635094248,
+            "mean": 172.1721265188529,
+            "sample_count": 60
+          },
+          "mean_detection_time_s": {
+            "ci95_high": 24.193594128939164,
+            "ci95_low": 19.307497841498087,
+            "mean": 21.750545985218626,
+            "sample_count": 60
+          },
+          "mean_total_distance_m": {
+            "ci95_high": 311.46115480659665,
+            "ci95_low": 264.1336276118246,
+            "mean": 287.7973912092106,
+            "sample_count": 120
+          },
+          "replans": {
+            "ci95_high": 6.300002711856928,
+            "ci95_low": 5.316663954809739,
+            "mean": 5.808333333333334,
+            "sample_count": 120
+          },
+          "restricted_mean_search_time_s": 35.588072454254394,
+          "success_per_km": 1.7373333298790445,
+          "success_rate": {
+            "ci95_high": 0.5898364527087647,
+            "ci95_low": 0.4101635472912353,
+            "mean": 0.5,
+            "sample_count": 120
+          },
+          "worst_case_scenario_success_rate": 0.0
+        },
+        "variant": {
+          "detection_weight": 1.2,
+          "information_gain_weight": 0.75,
+          "novelty_weight": 0.65,
+          "recovery_novelty_weight": 1.0,
+          "recovery_reserve_actions": 0,
+          "required_quality_coverage": 0.6,
+          "travel_weight": 0.08,
+          "variant_id": "balanced_success"
+        }
+      },
+      {
+        "lexicographic_rank_key": [
+          0.5,
+          0.0,
+          1.7301237347148588,
+          -577.9933422882091
+        ],
+        "metrics": {
+          "belief_calibration_brier": {
+            "ci95_high": 0.015560265852001282,
+            "ci95_low": 0.009713321339168895,
+            "mean": 0.012636793595585089,
+            "sample_count": 120
+          },
+          "distance_per_success_m": 577.9933422882091,
+          "energy_per_success": 35.74966711441046,
+          "episode_count": 120,
+          "failure_categories": {
+            "none": 60,
+            "occluded": 35,
+            "sensor_miss": 25
+          },
+          "mean_detection_distance_m": {
+            "ci95_high": 192.11059668676333,
+            "ci95_low": 152.23365635094248,
+            "mean": 172.1721265188529,
+            "sample_count": 60
+          },
+          "mean_detection_time_s": {
+            "ci95_high": 24.193594128939164,
+            "ci95_low": 19.307497841498087,
+            "mean": 21.750545985218626,
+            "sample_count": 60
+          },
+          "mean_total_distance_m": {
+            "ci95_high": 312.7880069337684,
+            "ci95_low": 265.2053353544407,
+            "mean": 288.99667114410454,
+            "sample_count": 120
+          },
+          "replans": {
+            "ci95_high": 6.344590264170014,
+            "ci95_low": 5.355409735829985,
+            "mean": 5.85,
+            "sample_count": 120
+          },
+          "restricted_mean_search_time_s": 35.74966711441046,
+          "success_per_km": 1.7301237347148588,
+          "success_rate": {
+            "ci95_high": 0.5898364527087647,
+            "ci95_low": 0.4101635472912353,
+            "mean": 0.5,
+            "sample_count": 120
+          },
+          "worst_case_scenario_success_rate": 0.0
+        },
+        "variant": {
+          "detection_weight": 1.2,
+          "information_gain_weight": 0.75,
+          "novelty_weight": 0.65,
+          "recovery_novelty_weight": 1.0,
+          "recovery_reserve_actions": 2,
+          "required_quality_coverage": 0.6,
+          "travel_weight": 0.08,
+          "variant_id": "late_recovery_2"
+        }
+      },
+      {
+        "lexicographic_rank_key": [
+          0.5,
+          0.0,
+          1.7324655214276892,
+          -577.2120643277915
+        ],
+        "metrics": {
+          "belief_calibration_brier": {
+            "ci95_high": 0.015560158495244034,
+            "ci95_low": 0.009713336736182375,
+            "mean": 0.012636747615713205,
+            "sample_count": 120
+          },
+          "distance_per_success_m": 577.2120643277915,
+          "energy_per_success": 35.74393654972291,
+          "episode_count": 120,
+          "failure_categories": {
+            "none": 60,
+            "occluded": 35,
+            "sensor_miss": 25
+          },
+          "mean_detection_distance_m": {
+            "ci95_high": 192.11059668676333,
+            "ci95_low": 152.23365635094248,
+            "mean": 172.1721265188529,
+            "sample_count": 60
+          },
+          "mean_detection_time_s": {
+            "ci95_high": 24.193594128939164,
+            "ci95_low": 19.307497841498087,
+            "mean": 21.750545985218626,
+            "sample_count": 60
+          },
+          "mean_total_distance_m": {
+            "ci95_high": 312.31930565879355,
+            "ci95_low": 264.89275866899794,
+            "mean": 288.60603216389575,
+            "sample_count": 120
+          },
+          "replans": {
+            "ci95_high": 6.381464559973712,
+            "ci95_low": 5.385202106692955,
+            "mean": 5.883333333333334,
+            "sample_count": 120
+          },
+          "restricted_mean_search_time_s": 35.74393654972291,
+          "success_per_km": 1.7324655214276892,
+          "success_rate": {
+            "ci95_high": 0.5898364527087647,
+            "ci95_low": 0.4101635472912353,
+            "mean": 0.5,
+            "sample_count": 120
+          },
+          "worst_case_scenario_success_rate": 0.0
+        },
+        "variant": {
+          "detection_weight": 1.2,
+          "information_gain_weight": 0.75,
+          "novelty_weight": 0.65,
+          "recovery_novelty_weight": 1.0,
+          "recovery_reserve_actions": 3,
+          "required_quality_coverage": 0.6,
+          "travel_weight": 0.08,
+          "variant_id": "late_recovery_3"
+        }
+      },
+      {
+        "lexicographic_rank_key": [
+          0.5,
+          0.0,
+          1.7227162846967863,
+          -580.4786364900526
+        ],
+        "metrics": {
+          "belief_calibration_brier": {
+            "ci95_high": 0.015342939920168873,
+            "ci95_low": 0.009494003053970355,
+            "mean": 0.012418471487069614,
+            "sample_count": 120
+          },
+          "distance_per_success_m": 580.4786364900526,
+          "energy_per_success": 35.9655984911693,
+          "episode_count": 120,
+          "failure_categories": {
+            "none": 60,
+            "occluded": 36,
+            "sensor_miss": 24
+          },
+          "mean_detection_distance_m": {
+            "ci95_high": 195.26013350782543,
+            "ci95_low": 154.52563796999263,
+            "mean": 174.89288573890903,
+            "sample_count": 60
+          },
+          "mean_detection_time_s": {
+            "ci95_high": 24.516975846995816,
+            "ci95_low": 19.52826796745266,
+            "mean": 22.022621907224238,
+            "sample_count": 60
+          },
+          "mean_total_distance_m": {
+            "ci95_high": 313.8375433922225,
+            "ci95_low": 266.6410930978301,
+            "mean": 290.2393182450263,
+            "sample_count": 120
+          },
+          "replans": {
+            "ci95_high": 6.449485486964187,
+            "ci95_low": 5.4338478463691455,
+            "mean": 5.941666666666666,
+            "sample_count": 120
+          },
+          "restricted_mean_search_time_s": 35.9655984911693,
+          "success_per_km": 1.7227162846967863,
+          "success_rate": {
+            "ci95_high": 0.5898364527087647,
+            "ci95_low": 0.4101635472912353,
+            "mean": 0.5,
+            "sample_count": 120
+          },
+          "worst_case_scenario_success_rate": 0.0
+        },
+        "variant": {
+          "detection_weight": 1.4,
+          "information_gain_weight": 0.65,
+          "novelty_weight": 0.4,
+          "recovery_novelty_weight": 1.3,
+          "recovery_reserve_actions": 2,
+          "required_quality_coverage": 0.7,
+          "travel_weight": 0.08,
+          "variant_id": "late_recovery_2_high_coverage"
+        }
+      }
+    ],
+    "seed_block": {
+      "base_seed": 5,
+      "repetitions": 5
+    },
+    "selected_variant": "highres_d_frozen_weights",
+    "selection_rule": "Lexicographic maximum: success rate, worst-case success, success per kilometer, then negative distance per success."
+  }
+}

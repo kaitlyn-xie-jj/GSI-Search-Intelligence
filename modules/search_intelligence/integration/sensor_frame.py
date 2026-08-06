@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, Mapping, Tuple
+from typing import Any, Dict, Mapping, Optional, Tuple
 
 from ..contracts import TargetDetection, Viewpoint
 
@@ -28,6 +28,9 @@ class SearchSensorFrame:
     visible_cell_ids: Tuple[str, ...] = ()
     visible_ground_points_xy: Tuple[Point2D, ...] = ()
     observation_quality: float = 1.0
+    visibility_probability: float = 1.0
+    negative_update_strength: float = 1.0
+    negative_update_rejection_reason: Optional[str] = None
     travel_time_s: float = 0.0
     travel_distance_m: float = 0.0
     energy_used: float = 0.0
@@ -40,8 +43,18 @@ class SearchSensorFrame:
             raise ValueError("timestamp_s must be finite and non-negative")
         if not self.frame_id.strip():
             raise ValueError("frame_id must not be empty")
-        if not 0 <= self.observation_quality <= 1:
-            raise ValueError("observation_quality must be within [0, 1]")
+        for name in (
+            "observation_quality",
+            "visibility_probability",
+            "negative_update_strength",
+        ):
+            if not 0 <= getattr(self, name) <= 1:
+                raise ValueError(f"{name} must be within [0, 1]")
+        if (
+            self.negative_update_rejection_reason is not None
+            and not self.negative_update_rejection_reason.strip()
+        ):
+            raise ValueError("negative_update_rejection_reason must not be empty")
         for name in ("travel_time_s", "travel_distance_m", "energy_used"):
             value = getattr(self, name)
             if not math.isfinite(value) or value < 0:
