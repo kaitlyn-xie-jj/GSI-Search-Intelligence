@@ -2,14 +2,31 @@
   "schema_version": "1.0",
   "projection_mode": "label_mass",
   "semantic_weights": {
-    "parking": 1.0,
-    "road": 0.65,
-    "plaza": 0.5,
-    "passage": 0.4,
-    "building_frontage": 0.35,
-    "access_point": 0.3
+    "road": 1.0,
+    "access_point": 0.95,
+    "plaza": 0.8,
+    "building_frontage": 0.55,
+    "passage": 0.35,
+    "parking": 0.18,
+    "sem_access_point_north": 1.0,
+    "sem_access_point_south": 0.9,
+    "sem_plaza_north": 0.9,
+    "sem_plaza_south": 0.78,
+    "sem_sunken_plaza_entrance_center": 0.65,
+    "sem_sunken_plaza_center": 0.35,
+    "sem_road_connector_north": 0.9,
+    "sem_road_connector_south": 0.9,
+    "sem_street_edge_road_south": 0.72,
+    "sem_woodland_edge_road_east": 0.55,
+    "sem_bike_parking_west": 0.12
   },
-  "confidence": 0.75,
-  "default_weight": 0.03,
-  "excluded_labels": ["building"]
+  "confidence": 0.68,
+  "default_weight": 0.08,
+  "excluded_labels": ["building"],
+  "metadata": {
+    "source": "llm_semantic_prior_regeneration",
+    "target_query": "yellow-van",
+    "ground_truth_pose_used": false,
+    "rationale": "Prefer vehicle-accessible roads, access points and plazas; downweight bicycle parking and narrow passages."
+  }
 }

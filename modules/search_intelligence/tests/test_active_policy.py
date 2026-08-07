@@ -581,6 +581,34 @@ class CandidatePolicyTests(unittest.TestCase):
         self.assertTrue(metadata["verification_mode"])
         self.assertEqual(metadata["verification_cell_id"], self.cell_ids[0])
 
+    def test_verification_can_hover_directly_above_localized_detection(self):
+        policy, state, _, _ = self._verification_case(
+            verification_followup_limit=1,
+        )
+        detection = state.observations[-1].detections[0]
+        localized = replace(
+            detection,
+            estimated_position=(12.25, 8.75, 0.5),
+        )
+        state = replace(
+            state,
+            observations=(replace(
+                state.observations[-1],
+                detections=(localized,),
+            ),),
+        )
+        policy = replace(
+            policy,
+            verification_max_horizontal_offset_m=1.0,
+        )
+
+        selected = policy.select_next(state)
+
+        self.assertEqual((selected.x, selected.y), (12.25, 8.75))
+        self.assertEqual(selected.z, 30.0)
+        self.assertTrue(policy.is_viewpoint_viable(state, selected))
+        self.assertTrue(policy.decision_metadata(state, selected)["verification_mode"])
+
     def test_single_confirmation_task_keeps_normal_active_ranking(self):
         policy, state, exploratory, _ = self._verification_case(
             min_confirmations=1,
@@ -630,6 +658,52 @@ class CandidatePolicyTests(unittest.TestCase):
             ],
             self.cell_ids[0],
         )
+
+    def test_transit_suspect_selects_a_cross_angle_inspection_viewpoint(self):
+        target_cell = self.cell_ids[1]
+        anchor = ViewpointCandidate(
+            "anchor",
+            Viewpoint(30.0, 10.0, 30.0, 0.0),
+            target_cell,
+            (target_cell,),
+        )
+        west = ViewpointCandidate(
+            "west",
+            Viewpoint(10.0, 10.0, 30.0, 0.0),
+            self.cell_ids[0],
+            (target_cell,),
+        )
+        east = ViewpointCandidate(
+            "east",
+            Viewpoint(50.0, 10.0, 30.0, 0.0),
+            self.cell_ids[2],
+            (target_cell,),
+        )
+        policy = AdaptiveBeliefLookaheadPolicy(
+            (anchor, west, east),
+            transit_suspect_inspection_limit=2,
+            transit_suspect_min_angle_rad=1.570796,
+        )
+        state = SearchState.initial(
+            self.task,
+            dict(zip(self.cell_ids, (0.05, 0.9, 0.05))),
+            current_viewpoint=west.viewpoint,
+            policy_metadata={
+                "last_replan_reason": "transit_occlusion_suspect",
+                "last_replan_diagnostics": {
+                    "suspect_cell_id": target_cell,
+                    "suspect_timestamp_s": 1.0,
+                    "suspect_viewpoint_xy": (10.0, 10.0),
+                },
+            },
+        )
+
+        selected = policy.select_next(state)
+
+        self.assertEqual(selected, east.viewpoint)
+        metadata = policy.decision_metadata(state, selected)
+        self.assertTrue(metadata["transit_suspect_inspection_mode"])
+        self.assertEqual(metadata["transit_suspect_cell_id"], target_cell)
 
 
 if __name__ == "__main__":

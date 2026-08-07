@@ -117,6 +117,7 @@ class ActiveSearchPolicy(SearchPolicy):
     distance_scale_m: float = 100.0
     minimum_utility: Optional[float] = None
     verification_followup_limit: Optional[int] = None
+    verification_max_horizontal_offset_m: Optional[float] = None
     planning_speed_mps: Optional[float] = None
     completion_time_reserve_s: float = 0.0
 
@@ -167,6 +168,11 @@ class ActiveSearchPolicy(SearchPolicy):
             and self.verification_followup_limit <= 0
         ):
             raise ValueError("verification_followup_limit must be positive")
+        if (
+            self.verification_max_horizontal_offset_m is not None
+            and self.verification_max_horizontal_offset_m <= 0
+        ):
+            raise ValueError("verification_max_horizontal_offset_m must be positive")
 
     def score_candidates(self, state: SearchState) -> Tuple[ViewpointScore, ...]:
         scores = tuple(
@@ -192,6 +198,7 @@ class ActiveSearchPolicy(SearchPolicy):
             )
         verification_cell_id = self._pending_verification_cell_id(state)
         if verification_cell_id is not None:
+            exact_verification = self._pending_verification_viewpoint(state)
             verification_candidates = sorted(
                 (
                     candidate
@@ -211,8 +218,13 @@ class ActiveSearchPolicy(SearchPolicy):
             verification_keys = {
                 candidate.viewpoint.key for candidate in verification_candidates
             }
-            viewpoints = tuple(
+            viewpoints = (() if exact_verification is None else (exact_verification,)) + tuple(
                 candidate.viewpoint for candidate in verification_candidates
+                if exact_verification is None
+                or math.hypot(
+                    candidate.viewpoint.x - exact_verification.x,
+                    candidate.viewpoint.y - exact_verification.y,
+                ) <= self.verification_max_horizontal_offset_m
             ) + tuple(
                 score.viewpoint
                 for score in scores
@@ -232,10 +244,15 @@ class ActiveSearchPolicy(SearchPolicy):
     ) -> Mapping[str, Any]:
         metadata = dict(super().decision_metadata(state, viewpoint))
         verification_cell_id = self._pending_verification_cell_id(state)
-        verification_mode = verification_cell_id is not None and any(
-            candidate.viewpoint.key == viewpoint.key
-            and verification_cell_id in candidate.visible_cell_ids
-            for candidate in _remaining_candidates(self.candidates, state)
+        exact_verification = self._pending_verification_viewpoint(state)
+        verification_mode = verification_cell_id is not None and (
+            exact_verification is not None
+            and exact_verification.key == viewpoint.key
+            or any(
+                candidate.viewpoint.key == viewpoint.key
+                and verification_cell_id in candidate.visible_cell_ids
+                for candidate in _remaining_candidates(self.candidates, state)
+            )
         )
         metadata.update({
             "verification_mode": verification_mode,
@@ -258,6 +275,9 @@ class ActiveSearchPolicy(SearchPolicy):
         return metadata
 
     def is_viewpoint_viable(self, state: SearchState, viewpoint: Viewpoint) -> bool:
+        exact_verification = self._pending_verification_viewpoint(state)
+        if exact_verification is not None and exact_verification.key == viewpoint.key:
+            return True
         return any(
             candidate.viewpoint.key == viewpoint.key
             for candidate in _viable_candidates(
@@ -313,6 +333,51 @@ class ActiveSearchPolicy(SearchPolicy):
         if not pending:
             return None
         return max(pending, key=lambda item: item[2])[3]
+
+    def _pending_verification_viewpoint(
+        self,
+        state: SearchState,
+    ) -> Optional[Viewpoint]:
+        if self.verification_max_horizontal_offset_m is None:
+            return None
+        cell_id = self._pending_verification_cell_id(state)
+        if cell_id is None:
+            return None
+        detection = next(
+            (
+                detection
+                for observation in reversed(state.observations)
+                for detection in reversed(observation.matching_detections(
+                    state.task.success_criteria.min_confidence
+                ))
+                if detection.attributes.get("localized_cell_id") == cell_id
+                and detection.estimated_position is not None
+            ),
+            None,
+        )
+        if detection is None or detection.estimated_position is None:
+            return None
+        template = min(
+            (
+                candidate.viewpoint
+                for candidate in self.candidates
+                if cell_id in candidate.visible_cell_ids
+            ),
+            key=lambda viewpoint: math.hypot(
+                viewpoint.x - detection.estimated_position[0],
+                viewpoint.y - detection.estimated_position[1],
+            ),
+            default=None,
+        )
+        if template is None:
+            return None
+        return Viewpoint(
+            x=float(detection.estimated_position[0]),
+            y=float(detection.estimated_position[1]),
+            z=template.z,
+            yaw=template.yaw,
+            pitch=template.pitch,
+        )
 
     def _score(
         self,
@@ -739,6 +804,8 @@ class AdaptiveBeliefLookaheadPolicy(AdaptiveActiveSearchPolicy):
     semantic_fraction: float = 0.3
     frontier_fraction_within_exploration: float = 0.5
     semantic_regions: Mapping[str, Tuple[str, ...]] = field(default_factory=dict)
+    transit_suspect_inspection_limit: int = 0
+    transit_suspect_min_angle_rad: float = math.pi / 2.0
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -759,10 +826,142 @@ class AdaptiveBeliefLookaheadPolicy(AdaptiveActiveSearchPolicy):
             raise ValueError(
                 "frontier_fraction_within_exploration must be within [0, 1]"
             )
+        if self.transit_suspect_inspection_limit < 0:
+            raise ValueError(
+                "transit_suspect_inspection_limit must not be negative"
+            )
+        if not 0 <= self.transit_suspect_min_angle_rad <= math.pi:
+            raise ValueError("transit_suspect_min_angle_rad must be within [0, pi]")
         object.__setattr__(self, "semantic_regions", {
             str(candidate_id): tuple(dict.fromkeys(str(label) for label in labels))
             for candidate_id, labels in self.semantic_regions.items()
         })
+
+    def plan(self, state: SearchState) -> Tuple[Viewpoint, ...]:
+        if self._pending_verification_cell_id(state) is not None:
+            return super().plan(state)
+        inspection = self._pending_transit_suspect_inspection(state)
+        planned = super().plan(state)
+        if inspection is None:
+            return planned
+        viewpoint, _ = inspection
+        return _cap_viewpoint_budget(
+            (viewpoint,) + tuple(item for item in planned if item.key != viewpoint.key),
+            state,
+        )
+
+    def decision_metadata(
+        self,
+        state: SearchState,
+        viewpoint: Viewpoint,
+    ) -> Mapping[str, Any]:
+        metadata = dict(super().decision_metadata(state, viewpoint))
+        inspection = self._pending_transit_suspect_inspection(state)
+        active = inspection is not None and inspection[0].key == viewpoint.key
+        metadata.update({
+            "transit_suspect_inspection_mode": active,
+            "transit_suspect_cell_id": inspection[1] if active else None,
+        })
+        return metadata
+
+    def _pending_transit_suspect_inspection(
+        self,
+        state: SearchState,
+    ) -> Optional[Tuple[Viewpoint, str]]:
+        if self.transit_suspect_inspection_limit <= 0:
+            return None
+        if state.policy_metadata.get("last_replan_reason") != "transit_occlusion_suspect":
+            return None
+        diagnostics = state.policy_metadata.get("last_replan_diagnostics")
+        if not isinstance(diagnostics, Mapping):
+            return None
+        cell_id = diagnostics.get("suspect_cell_id")
+        timestamp = diagnostics.get("suspect_timestamp_s")
+        suspect_xy = diagnostics.get("suspect_viewpoint_xy")
+        if (
+            cell_id not in state.belief
+            or timestamp is None
+            or not isinstance(suspect_xy, (tuple, list))
+            or len(suspect_xy) != 2
+        ):
+            return None
+        cell_id = str(cell_id)
+        inspections = tuple(
+            observation
+            for observation in state.observations
+            if observation.timestamp_s > float(timestamp)
+            and observation.action_viewpoint_key is not None
+            and any(
+                candidate.viewpoint.key == observation.action_viewpoint_key
+                and cell_id in candidate.visible_cell_ids
+                for candidate in self.candidates
+            )
+        )
+        if len(inspections) >= self.transit_suspect_inspection_limit:
+            return None
+        anchor = next(
+            (
+                candidate.viewpoint
+                for candidate in self.candidates
+                if candidate.anchor_cell_id == cell_id
+            ),
+            None,
+        )
+        if anchor is None:
+            return None
+        reference_angles = [
+            math.atan2(float(suspect_xy[1]) - anchor.y, float(suspect_xy[0]) - anchor.x)
+        ]
+        reference_angles.extend(
+            math.atan2(
+                observation.viewpoint.y - anchor.y,
+                observation.viewpoint.x - anchor.x,
+            )
+            for observation in inspections
+        )
+        viable = tuple(
+            candidate
+            for candidate in _viable_candidates(
+                self.candidates,
+                state,
+                planning_speed_mps=self.planning_speed_mps,
+                completion_time_reserve_s=self.completion_time_reserve_s,
+            )
+            if cell_id in candidate.visible_cell_ids
+            and math.hypot(
+                candidate.viewpoint.x - anchor.x,
+                candidate.viewpoint.y - anchor.y,
+            ) > 1e-6
+        )
+        ranked = sorted(
+            viable,
+            key=lambda candidate: (
+                -min(
+                    _wrapped_angle_distance(
+                        math.atan2(
+                            candidate.viewpoint.y - anchor.y,
+                            candidate.viewpoint.x - anchor.x,
+                        ),
+                        reference,
+                    )
+                    for reference in reference_angles
+                ),
+                _travel_distance(state.current_viewpoint, candidate.viewpoint),
+                candidate.candidate_id,
+            ),
+        )
+        if not ranked:
+            return None
+        best_angle = math.atan2(
+            ranked[0].viewpoint.y - anchor.y,
+            ranked[0].viewpoint.x - anchor.x,
+        )
+        if min(
+            _wrapped_angle_distance(best_angle, reference)
+            for reference in reference_angles
+        ) < self.transit_suspect_min_angle_rad:
+            return None
+        return ranked[0].viewpoint, cell_id
 
     def score_candidates(
         self,
@@ -1089,6 +1288,10 @@ def _travel_distance(
         + (current.y - candidate.y) ** 2
         + (current.z - candidate.z) ** 2
     )
+
+
+def _wrapped_angle_distance(first: float, second: float) -> float:
+    return abs(math.atan2(math.sin(first - second), math.cos(first - second)))
 
 
 def _binary_expected_information_gain(

@@ -12,6 +12,9 @@ from gsi_search_bridge.search_node import (
     _projection_visibility_probability,
     _quality_after_sensor_skew,
     _replan_reason,
+    _rgb_image_to_ppm,
+    _transit_replan_protected,
+    _transit_suspect_cell_is_available,
 )
 
 
@@ -93,6 +96,38 @@ def test_replan_hysteresis_suppresses_small_frequent_updates():
     ) == "kl_divergence_exceeded"
 
 
+def test_transit_suspect_inspection_is_not_interrupted_by_blocked_frames():
+    assert _transit_replan_protected(
+        trigger="negative_detection_in_transit",
+        verification_in_progress=False,
+        suspect_inspection_in_progress=True,
+    )
+
+
+def test_positive_detection_interrupts_transit_suspect_inspection():
+    assert not _transit_replan_protected(
+        trigger="positive_detection_in_transit",
+        verification_in_progress=False,
+        suspect_inspection_in_progress=True,
+    )
+
+
+def test_verification_remains_protected_from_transit_replans():
+    assert _transit_replan_protected(
+        trigger="positive_detection_in_transit",
+        verification_in_progress=True,
+        suspect_inspection_in_progress=False,
+    )
+
+
+def test_transit_suspect_cell_stops_replanning_after_global_limit():
+    counts = {"cell-a": 2}
+
+    assert not _transit_suspect_cell_is_available("cell-a", counts, 2)
+    assert _transit_suspect_cell_is_available("cell-b", counts, 2)
+    assert not _transit_suspect_cell_is_available("cell-b", counts, 0)
+
+
 def test_belief_total_variation_is_symmetric():
     first = {"a": 0.8, "b": 0.2}
     second = {"a": 0.5, "b": 0.5}
@@ -144,3 +179,15 @@ def test_new_visible_cell_count_only_counts_quality_improvements():
         ("cell-a", "cell-b", "cell-b", "cell-c"),
         0.6,
     ) == 2
+
+
+def test_rgb_image_to_ppm_converts_bgr_and_ignores_row_padding():
+    image = SimpleNamespace(
+        width=1,
+        height=1,
+        step=4,
+        encoding="bgr8",
+        data=bytes((3, 2, 1, 99)),
+    )
+
+    assert _rgb_image_to_ppm(image) == b"P6\n1 1\n255\n\x01\x02\x03"

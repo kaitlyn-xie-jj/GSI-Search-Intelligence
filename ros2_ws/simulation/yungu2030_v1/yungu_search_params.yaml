@@ -8,13 +8,14 @@ gsi_search_node:
     area_max_x_m: 324.729980
     area_max_y_m: 210.563126
     grid_resolution_m: 10.0
-    flight_altitude_m: 70.0
-    sensor_footprint_radius_m: 40.0
+    flight_altitude_m: 30.0
+    sensor_footprint_radius_m: 30.0
     max_viewpoints: 60
-    search_time_budget_s: 595.0
+    search_time_budget_s: 1000.0
     min_confirmations: 2
     max_localization_error_m: 8.0
-    verification_followup_limit: 0
+    verification_followup_limit: 1
+    verification_max_horizontal_offset_m: 1.0
     semantic_map_path: /workspace/VisionFlow-PX4/Tools/simulation/gz/worlds/yungu2030_semantic_map.json
     search_prior_path: simulation/yungu2030_v1/yungu_search_prior.json
     sensor_detection_probability: 0.85
@@ -47,16 +48,25 @@ gsi_search_node:
     maximum_sensor_skew_s: 3.0
     minimum_observation_quality: 0.5
     minimum_negative_observation_quality: 0.5
-    minimum_projected_ground_points: 10
+    # At 30 m, unobstructed frames yielded roughly 2,000-3,000 projected
+    # ground samples.  Treat lower support as a partially blocked view.
+    minimum_projected_ground_points: 2000
     require_detections: true
     require_point_cloud: true
     record_first_positive_detection_in_transit: true
     transit_detection_max_sensor_skew_s: 1.0
     transit_detection_min_observation_quality: 0.5
     record_negative_observations_in_transit: true
-    transit_negative_min_interval_s: 10.0
-    transit_negative_min_distance_m: 20.0
+    transit_negative_min_interval_s: 2.0
+    transit_negative_min_distance_m: 5.0
     transit_negative_min_new_cells: 3
+    transit_suspect_min_belief: 0.004
+    transit_suspect_inspection_limit: 2
+    transit_suspect_min_angle_rad: 1.570796
+    transit_suspect_snapshot_dir: /tmp/GSI/results/yungu2030_sensor_validation/suspect_snapshots
+    transit_suspect_snapshot_limit: 20
+    verification_snapshot_dir: /tmp/GSI/results/yungu2030_sensor_validation/verification_snapshots
+    verification_snapshot_limit: 20
     replan_min_interval_s: 20.0
     replan_belief_total_variation_threshold: 0.1
     replan_kl_divergence_threshold_nats: 0.05
@@ -132,7 +142,10 @@ gsi_color_target_detector:
     maximum_blue: 120
     minimum_yellow_margin: 60
     maximum_red_green_difference: 100
-    minimum_pixels: 50
+    # 160x120, 60 deg HFOV and a 1.6x0.8 m roof at 30 m project to about
+    # 8x4=32 pixels.  Require 18 threshold-qualified pixels (~56% of that area)
+    # to tolerate shading/antialiasing without accepting tiny speckles.
+    minimum_pixels: 18
     depth_window_radius_px: 6
     minimum_depth_m: 0.2
     maximum_depth_m: 90.0

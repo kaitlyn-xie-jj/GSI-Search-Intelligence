@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 import struct
+from dataclasses import asdict
 from pathlib import Path
 from typing import Dict, Iterable, Mapping, Optional, Tuple
 
@@ -62,6 +63,9 @@ class GsiSearchNode(Node):
         self._last_goal_publish_s = float("-inf")
         self._last_progress_log_s = float("-inf")
         self._transit_detection_recorded = False
+        self._transit_suspect_snapshot_count = 0
+        self._transit_suspect_inspection_counts: Dict[str, int] = {}
+        self._verification_snapshot_count = 0
         self._outcome_published = False
         self._pointcloud_projector = PointCloudGroundProjector(
             camera_translation=(
@@ -114,6 +118,7 @@ class GsiSearchNode(Node):
             "min_confirmations": 2,
             "max_localization_error_m": 5.0,
             "verification_followup_limit": 0,
+            "verification_max_horizontal_offset_m": 0.0,
             "semantic_map_path": "",
             "search_prior_path": "",
             "sensor_detection_probability": 0.85,
@@ -155,6 +160,13 @@ class GsiSearchNode(Node):
             "transit_negative_min_interval_s": 10.0,
             "transit_negative_min_distance_m": 20.0,
             "transit_negative_min_new_cells": 3,
+            "transit_suspect_min_belief": 0.05,
+            "transit_suspect_inspection_limit": 0,
+            "transit_suspect_min_angle_rad": 1.5707963267948966,
+            "transit_suspect_snapshot_dir": "",
+            "transit_suspect_snapshot_limit": 20,
+            "verification_snapshot_dir": "",
+            "verification_snapshot_limit": 20,
             "replan_min_interval_s": 20.0,
             "replan_belief_total_variation_threshold": 0.1,
             "replan_kl_divergence_threshold_nats": 0.05,
@@ -377,6 +389,11 @@ class GsiSearchNode(Node):
             "verification_followup_limit": (
                 verification_limit if verification_limit > 0 else None
             ),
+            "verification_max_horizontal_offset_m": (
+                float(self._parameter("verification_max_horizontal_offset_m"))
+                if float(self._parameter("verification_max_horizontal_offset_m")) > 0
+                else None
+            ),
         }
         cell_by_id = {cell.cell_id: cell for cell in grid.searchable_cells}
         policy_kwargs.update({
@@ -419,6 +436,12 @@ class GsiSearchNode(Node):
                     ].semantic_labels
                     for candidate in candidates
                 },
+                "transit_suspect_inspection_limit": int(
+                    self._parameter("transit_suspect_inspection_limit")
+                ),
+                "transit_suspect_min_angle_rad": float(
+                    self._parameter("transit_suspect_min_angle_rad")
+                ),
             })
         policy = policy_type(**policy_kwargs)
         self._adapter = SearchObservationAdapter(
@@ -473,6 +496,15 @@ class GsiSearchNode(Node):
         self._observation_checkpoint_battery = self._command_start_battery
         self._settled_since_s = None
         self._publish_goal(viewpoint)
+        decision = self._session.pending_policy_metadata if self._session else {}
+        self.get_logger().info(
+            "Selected viewpoint "
+            f"({viewpoint.x:.2f}, {viewpoint.y:.2f}, {viewpoint.z:.2f}); "
+            f"verification_mode={bool(decision.get('verification_mode'))}; "
+            f"verification_cell={decision.get('verification_cell_id')}; "
+            f"transit_suspect_mode={bool(decision.get('transit_suspect_inspection_mode'))}; "
+            f"transit_suspect_cell={decision.get('transit_suspect_cell_id')}"
+        )
         self._write_trace("command", {
             "step_index": self._session.state.step_index if self._session else 0,
             "commanded_viewpoint": _viewpoint_dict(viewpoint),
@@ -575,6 +607,16 @@ class GsiSearchNode(Node):
         observation = self._adapter.adapt(frame, self._commanded_viewpoint)
         replan_reason = None
         replan_diagnostics: Dict[str, object] = {}
+        suspect_snapshot_path = None
+        verification_snapshot_path = None
+        verification_in_progress = bool(
+            self._session.pending_policy_metadata.get("verification_mode")
+        )
+        suspect_inspection_in_progress = bool(
+            self._session.pending_policy_metadata.get(
+                "transit_suspect_inspection_mode"
+            )
+        )
         if transit:
             prior_belief = dict(self._session.state.belief)
             prior_utility = _selected_utility(
@@ -644,6 +686,50 @@ class GsiSearchNode(Node):
                 "expected_reward_change": reward_change,
                 "time_since_replan_s": time_since_replan,
             }
+            protected_action = _transit_replan_protected(
+                trigger=trigger,
+                verification_in_progress=verification_in_progress,
+                suspect_inspection_in_progress=suspect_inspection_in_progress,
+            )
+            suspect = (
+                None
+                if protected_action
+                else self._transit_occlusion_suspect(observation, state)
+            )
+            if protected_action:
+                replan_diagnostics["replan_suppressed_for_protected_action"] = (
+                    "verification"
+                    if verification_in_progress
+                    else "transit_suspect_inspection"
+                )
+                replan_reason = None
+            elif suspect is not None:
+                suspect_cell_id, suspect_belief = suspect
+                suspect_snapshot_path = self._save_transit_suspect_snapshot(
+                    now,
+                    suspect_cell_id,
+                    suspect_belief,
+                )
+                replan_reason = "transit_occlusion_suspect"
+                replan_diagnostics.update({
+                    "suspect_cell_id": suspect_cell_id,
+                    "suspect_belief": suspect_belief,
+                    "completed_suspect_inspections": (
+                        self._transit_suspect_inspection_counts.get(
+                            suspect_cell_id,
+                            0,
+                        )
+                    ),
+                    "suspect_timestamp_s": now,
+                    "suspect_viewpoint_xy": (
+                        observation.viewpoint.x,
+                        observation.viewpoint.y,
+                    ),
+                    "suspect_snapshot_path": suspect_snapshot_path,
+                    "negative_update_rejection_reason": (
+                        observation.negative_update_rejection_reason
+                    ),
+                })
             if replan_reason is not None:
                 self._session.request_replan(
                     replan_reason,
@@ -653,7 +739,36 @@ class GsiSearchNode(Node):
                 state = self._session.state
         else:
             new_cells = None
+            decision = self._session.pending_policy_metadata
+            inspected_suspect_cell = (
+                str(decision.get("transit_suspect_cell_id"))
+                if bool(decision.get("transit_suspect_inspection_mode"))
+                and decision.get("transit_suspect_cell_id") is not None
+                else None
+            )
+            if bool(decision.get("verification_mode")):
+                verification_snapshot_path = self._save_verification_snapshot(
+                    now,
+                    observation,
+                    decision,
+                )
             state = self._session.record_observation(observation)
+            if inspected_suspect_cell is not None:
+                completed = (
+                    self._transit_suspect_inspection_counts.get(
+                        inspected_suspect_cell,
+                        0,
+                    )
+                    + 1
+                )
+                self._transit_suspect_inspection_counts[
+                    inspected_suspect_cell
+                ] = completed
+                self.get_logger().info(
+                    "Completed transit suspect inspection "
+                    f"cell={inspected_suspect_cell}; count={completed}/"
+                    f"{int(self._parameter('transit_suspect_inspection_limit'))}"
+                )
         self._write_trace("observation", {
             "step_index": state.step_index,
             "observation": observation.to_dict(),
@@ -666,6 +781,8 @@ class GsiSearchNode(Node):
             "replan_reason": replan_reason,
             "replan_diagnostics": replan_diagnostics,
             "new_visible_cell_count": new_cells,
+            "transit_suspect_snapshot_path": suspect_snapshot_path,
+            "verification_snapshot_path": verification_snapshot_path,
         })
         self.get_logger().info(
             f"Recorded {'transit evidence' if transit else 'viewpoint'} "
@@ -687,6 +804,135 @@ class GsiSearchNode(Node):
         if self._session.completed:
             self._publish_outcome()
         return True
+
+    def _transit_occlusion_suspect(
+        self,
+        observation: object,
+        state: object,
+    ) -> Optional[Tuple[str, float]]:
+        if (
+            observation.negative_update_rejection_reason != "blocked_view"
+            or self._grid is None
+            or not state.belief
+        ):
+            return None
+        footprint_ids = {
+            cell.cell_id
+            for cell in self._grid.cells_within_radius(
+                observation.viewpoint.x,
+                observation.viewpoint.y,
+                float(self._parameter("sensor_footprint_radius_m")),
+            )
+        }
+        inspection_limit = int(
+            self._parameter("transit_suspect_inspection_limit")
+        )
+        local_cells = tuple(
+            cell_id
+            for cell_id in footprint_ids
+            if cell_id in state.belief
+            and _transit_suspect_cell_is_available(
+                cell_id,
+                self._transit_suspect_inspection_counts,
+                inspection_limit,
+            )
+        )
+        if not local_cells:
+            return None
+        suspect_cell_id = min(
+            local_cells,
+            key=lambda cell_id: (-float(state.belief[cell_id]), cell_id),
+        )
+        suspect_belief = float(state.belief[suspect_cell_id])
+        if suspect_belief < float(self._parameter("transit_suspect_min_belief")):
+            return None
+        return suspect_cell_id, suspect_belief
+
+    def _save_transit_suspect_snapshot(
+        self,
+        timestamp_s: float,
+        cell_id: str,
+        belief: float,
+    ) -> Optional[str]:
+        directory = str(self._parameter("transit_suspect_snapshot_dir")).strip()
+        limit = int(self._parameter("transit_suspect_snapshot_limit"))
+        rgb_item = self._latest.get("rgb")
+        if (
+            not directory
+            or rgb_item is None
+            or self._transit_suspect_snapshot_count >= limit
+        ):
+            return None
+        try:
+            ppm = _rgb_image_to_ppm(rgb_item[0])
+            output = Path(directory)
+            output.mkdir(parents=True, exist_ok=True)
+            self._transit_suspect_snapshot_count += 1
+            stem = (
+                f"suspect_{self._transit_suspect_snapshot_count:03d}_"
+                f"{int(timestamp_s * 1000):013d}"
+            )
+            image_path = output / f"{stem}.ppm"
+            metadata_path = output / f"{stem}.json"
+            image_path.write_bytes(ppm)
+            metadata_path.write_text(json.dumps({
+                "timestamp_s": timestamp_s,
+                "suspect_cell_id": cell_id,
+                "suspect_belief": belief,
+                "viewpoint": _viewpoint_dict(self._actual_viewpoint()),
+                "image": str(image_path),
+            }, indent=2, sort_keys=True), encoding="utf-8")
+            return str(image_path)
+        except (OSError, TypeError, ValueError) as error:
+            self.get_logger().warning(f"Suspect snapshot skipped: {error}")
+            return None
+
+    def _save_verification_snapshot(
+        self,
+        timestamp_s: float,
+        observation: object,
+        decision: Mapping[str, object],
+    ) -> Optional[str]:
+        directory = str(self._parameter("verification_snapshot_dir")).strip()
+        limit = int(self._parameter("verification_snapshot_limit"))
+        rgb_item = self._latest.get("rgb")
+        if (
+            not directory
+            or rgb_item is None
+            or self._verification_snapshot_count >= limit
+        ):
+            return None
+        try:
+            ppm = _rgb_image_to_ppm(rgb_item[0])
+            output = Path(directory)
+            output.mkdir(parents=True, exist_ok=True)
+            self._verification_snapshot_count += 1
+            stem = (
+                f"verification_{self._verification_snapshot_count:03d}_"
+                f"{int(timestamp_s * 1000):013d}"
+            )
+            image_path = output / f"{stem}.ppm"
+            metadata_path = output / f"{stem}.json"
+            image_path.write_bytes(ppm)
+            metadata_path.write_text(json.dumps({
+                "timestamp_s": timestamp_s,
+                "verification_cell_id": decision.get("verification_cell_id"),
+                "viewpoint": _viewpoint_dict(observation.viewpoint),
+                "detections": [asdict(item) for item in observation.detections],
+                "visibility_probability": observation.visibility_probability,
+                "negative_update_rejection_reason": (
+                    observation.negative_update_rejection_reason
+                ),
+                "image": str(image_path),
+            }, indent=2, sort_keys=True), encoding="utf-8")
+            self.get_logger().info(
+                "Saved double-check snapshot "
+                f"{image_path}; detections={len(observation.detections)}"
+            )
+            return str(image_path)
+        except (OSError, TypeError, ValueError) as error:
+            self.get_logger().warning(f"Double-check snapshot skipped: {error}")
+            return None
 
     def _can_record_positive_detection_in_transit(self) -> bool:
         if (
@@ -749,14 +995,11 @@ class GsiSearchNode(Node):
             maximum_localization_error_m=criteria.max_localization_error_m,
         ):
             return False
-        return not any(
-            _has_acceptable_detection(
-                observation.detections,
-                minimum_confidence=criteria.min_confidence,
-                maximum_localization_error_m=criteria.max_localization_error_m,
-            )
-            for observation in self._session.state.observations
-        )
+        # A prior transit hit must not permanently disable later path sampling:
+        # it may be the only hit and therefore still require an independent
+        # confirmation.  Only a detection in the current frame suppresses the
+        # negative update.
+        return True
 
     def _dynamic_sensor_receipt_skew_s(self) -> float:
         names = ["odom", "rgb", "depth"]
@@ -992,6 +1235,35 @@ def _message_timestamp_s(message: object) -> float:
     return float(stamp.sec) + float(stamp.nanosec) / 1e9
 
 
+def _rgb_image_to_ppm(message: object) -> bytes:
+    """Encode one ROS RGB/BGR image as a dependency-free PPM snapshot."""
+    width = int(message.width)
+    height = int(message.height)
+    step = int(message.step)
+    encoding = str(message.encoding).lower()
+    channels = 4 if encoding in {"rgba8", "bgra8"} else 3
+    if encoding not in {"rgb8", "bgr8", "rgba8", "bgra8"}:
+        raise ValueError(f"unsupported RGB snapshot encoding: {message.encoding}")
+    if width <= 0 or height <= 0 or step < width * channels:
+        raise ValueError("invalid RGB snapshot dimensions")
+    raw = bytes(message.data)
+    if len(raw) < step * height:
+        raise ValueError("RGB snapshot data is truncated")
+    rgb = bytearray(width * height * 3)
+    output_index = 0
+    for row in range(height):
+        row_start = row * step
+        for column in range(width):
+            pixel = row_start + column * channels
+            if encoding.startswith("rgb"):
+                red, green, blue = raw[pixel:pixel + 3]
+            else:
+                blue, green, red = raw[pixel:pixel + 3]
+            rgb[output_index:output_index + 3] = bytes((red, green, blue))
+            output_index += 3
+    return f"P6\n{width} {height}\n255\n".encode("ascii") + bytes(rgb)
+
+
 def _yaw_from_quaternion(quaternion: object) -> float:
     x, y, z, w = (
         float(quaternion.x),
@@ -1160,6 +1432,38 @@ def _replan_reason(
     if expected_reward_change >= expected_reward_change_threshold:
         return "expected_reward_changed"
     return None
+
+
+def _transit_replan_protected(
+    *,
+    trigger: str,
+    verification_in_progress: bool,
+    suspect_inspection_in_progress: bool,
+) -> bool:
+    """Keep a committed inspection from being reset by more blocked frames.
+
+    Positive evidence may interrupt an occlusion inspection so the policy can
+    immediately schedule exact verification. Verification itself remains
+    protected because it is already the response to positive evidence.
+    """
+    if verification_in_progress:
+        return True
+    return (
+        suspect_inspection_in_progress
+        and trigger != "positive_detection_in_transit"
+    )
+
+
+def _transit_suspect_cell_is_available(
+    cell_id: str,
+    inspection_counts: Mapping[str, int],
+    inspection_limit: int,
+) -> bool:
+    """Bound repeated occlusion recovery across separate replan events."""
+    return (
+        inspection_limit > 0
+        and int(inspection_counts.get(cell_id, 0)) < inspection_limit
+    )
 
 
 def _can_use_transit_detection_evidence(

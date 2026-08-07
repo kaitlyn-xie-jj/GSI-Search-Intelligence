@@ -33,8 +33,8 @@ cd /mnt/c/Users/96981/Documents/Codex/2026-07-27/files-mentioned-by-the-user-sea
 bash ros2_ws/run_yungu2030_sensor_trial.sh
 ```
 
-The default evaluator-only yellow van is at `(48, 90, 0.4, 0)` in the open
-`SEM_PLAZA_NORTH` region, while the UAV starts at `(42, 90, 0.25)`. Override a
+The default evaluator-only yellow van is at `(175, 65, 0.4, 0)`, while the UAV
+starts at `(42, 90, 0.25)`. Override a
 position only through the run environment, for example:
 
 ```bash
