@@ -85,20 +85,45 @@ class CoveragePolicy(SearchPolicy):
     def coverage_status_counts(self, state: SearchState) -> Dict[str, int]:
         if self.search_grid is None:
             return {}
-        covered = sum(
-            state.observed_cell_quality.get(cell.cell_id, 0.0)
-            >= self.recovery_min_quality
-            for cell in self.search_grid.searchable_cells
-        )
-        searchable = len(self.search_grid.searchable_cells)
-        primary_complete = not self._primary_remaining(state)
+        cell_states = self.coverage_cell_states(state)
         return {
-            "coverage_searchable_cells": searchable,
-            "coverage_covered_cells": covered,
-            "coverage_unseen_cells": 0 if primary_complete else searchable - covered,
-            "coverage_deferred_cells": searchable - covered if primary_complete else 0,
-            "coverage_excluded_cells": len(self.search_grid.cells) - searchable,
+            "coverage_searchable_cells": sum(
+                value != "EXCLUDED" for value in cell_states.values()
+            ),
+            "coverage_covered_cells": sum(
+                value == "COVERED" for value in cell_states.values()
+            ),
+            "coverage_unseen_cells": sum(
+                value == "UNSEEN" for value in cell_states.values()
+            ),
+            "coverage_deferred_cells": sum(
+                value == "DEFERRED" for value in cell_states.values()
+            ),
+            "coverage_excluded_cells": sum(
+                value == "EXCLUDED" for value in cell_states.values()
+            ),
         }
+
+    def coverage_cell_states(self, state: SearchState) -> Dict[str, str]:
+        """Return the auditable state-machine state of every search-grid cell."""
+        if self.search_grid is None:
+            return {}
+        primary_complete = not self._primary_remaining(state)
+        states: Dict[str, str] = {}
+        for cell in self.search_grid.cells:
+            if not cell.searchable:
+                status = "EXCLUDED"
+            elif (
+                state.observed_cell_quality.get(cell.cell_id, 0.0)
+                >= self.recovery_min_quality
+            ):
+                status = "COVERED"
+            elif primary_complete:
+                status = "DEFERRED"
+            else:
+                status = "UNSEEN"
+            states[cell.cell_id] = status
+        return states
 
     def _primary_remaining(self, state: SearchState) -> Tuple[Viewpoint, ...]:
         primary = self._primary_viewpoints(state)

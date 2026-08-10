@@ -119,6 +119,7 @@ class CoveragePolicyTests(unittest.TestCase):
 
         recovery = policy.plan(state)
         metadata = policy.decision_metadata(state, recovery[0])
+        cell_states = policy.coverage_cell_states(state)
 
         self.assertTrue(recovery)
         self.assertEqual(metadata["coverage_phase"], "recovery")
@@ -126,6 +127,15 @@ class CoveragePolicyTests(unittest.TestCase):
         self.assertEqual(
             metadata["coverage_deferred_cells"],
             len(grid.searchable_cells) - 1,
+        )
+        self.assertEqual(
+            cell_states[grid.searchable_cells[0].cell_id], "COVERED"
+        )
+        self.assertTrue(
+            all(
+                cell_states[cell.cell_id] == "DEFERRED"
+                for cell in grid.searchable_cells[1:]
+            )
         )
 
     def test_recovery_finishes_when_all_searchable_cells_are_covered(self):
