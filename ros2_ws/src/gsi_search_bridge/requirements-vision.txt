@@ -1,6 +1,9 @@
 # Ultralytics is AGPL-3.0; review license obligations before distribution.
 # ROS 2 Humble / colcon-core 0.21 requires setuptools below 80.
 setuptools>=77.0.3,<80
+# Setuptools 79 calls canonicalize_version(..., strip_trailing_zero=...),
+# which is unavailable in older packaging releases shipped by some images.
+packaging>=22
 cffi>=1.4.1
 # ROS 2 Humble's cv_bridge binary is built against the NumPy 1.x ABI.
 numpy>=1.23,<2

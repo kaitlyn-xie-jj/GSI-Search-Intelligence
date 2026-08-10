@@ -112,14 +112,18 @@ docker cp "${GSI_ROOT}/modules" "${CONTAINER_NAME}:/tmp/GSI/modules"
 docker cp "${ROS2_WS}" "${CONTAINER_NAME}:/tmp/GSI/ros2_ws"
 docker exec "${CONTAINER_NAME}" mkdir -p /tmp/GSI/models
 docker cp "${YOLO_MODEL_PATH}" "${CONTAINER_NAME}:/tmp/GSI/models/yolo11n.pt"
-if ! docker exec "${CONTAINER_NAME}" python3 -c 'import ultralytics' >/dev/null 2>&1; then
-    if [[ "${INSTALL_YOLO_DEPS}" != "1" ]]; then
+if [[ "${INSTALL_YOLO_DEPS}" == "1" ]]; then
+    # Always reconcile the complete pinned stack. Checking only that
+    # Ultralytics imports can miss incompatible transitive build tools.
+    docker exec "${CONTAINER_NAME}" python3 -m pip install \
+        -r /tmp/GSI/ros2_ws/src/gsi_search_bridge/requirements-vision.txt
+else
+    if ! docker exec "${CONTAINER_NAME}" python3 -c \
+        'import cv2, numpy, packaging, setuptools, ultralytics' >/dev/null 2>&1; then
         echo "Ultralytics is not installed in ${CONTAINER_NAME}." >&2
         echo "Set GSI_INSTALL_YOLO_DEPS=1 or bake requirements-vision.txt into the image." >&2
         exit 1
     fi
-    docker exec "${CONTAINER_NAME}" python3 -m pip install \
-        -r /tmp/GSI/ros2_ws/src/gsi_search_bridge/requirements-vision.txt
 fi
 docker exec "${CONTAINER_NAME}" bash -lc \
     "cd /tmp/GSI/ros2_ws && bash spawn_visionflow_target.sh yungu2030_local_origin '${TARGET_X_M}' '${TARGET_Y_M}' '${TARGET_Z_M}' '${TARGET_YAW_RAD}' yellow_search_van"
