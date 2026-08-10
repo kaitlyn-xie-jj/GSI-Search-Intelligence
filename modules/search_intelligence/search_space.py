@@ -216,6 +216,35 @@ class SearchGrid:
             if math.hypot(cell.center[0] - x, cell.center[1] - y) <= radius_m + 1e-9
         )
 
+    def cells_within_oriented_rectangle(
+        self,
+        x: float,
+        y: float,
+        half_width_m: float,
+        half_height_m: float,
+        *,
+        yaw_rad: float = 0.0,
+        searchable_only: bool = True,
+    ) -> Tuple[SearchCell, ...]:
+        """Return cells whose centers lie in a rotated camera footprint."""
+        if half_width_m < 0 or half_height_m < 0:
+            raise ValueError("footprint half extents must not be negative")
+        cosine = math.cos(yaw_rad)
+        sine = math.sin(yaw_rad)
+        candidates = self.searchable_cells if searchable_only else self.cells
+        visible = []
+        for cell in candidates:
+            dx = cell.center[0] - x
+            dy = cell.center[1] - y
+            camera_x = cosine * dx + sine * dy
+            camera_y = -sine * dx + cosine * dy
+            if (
+                abs(camera_x) <= half_width_m + 1e-9
+                and abs(camera_y) <= half_height_m + 1e-9
+            ):
+                visible.append(cell)
+        return tuple(visible)
+
     def uniform_belief(self) -> Dict[str, float]:
         """Return a normalized prior over searchable cells."""
         searchable = self.searchable_cells
@@ -257,6 +286,8 @@ class CandidateViewpointGenerator:
     altitude_m: float = 30.0
     horizontal_fov_rad: float = math.pi / 2.0
     footprint_radius_m: Optional[float] = None
+    footprint_half_width_m: Optional[float] = None
+    footprint_half_height_m: Optional[float] = None
     stride_cells: int = 1
     yaw_rad: float = 0.0
     pitch_rad: float = -math.pi / 2.0
@@ -269,6 +300,17 @@ class CandidateViewpointGenerator:
             raise ValueError("horizontal_fov_rad must be within (0, pi)")
         if self.footprint_radius_m is not None and self.footprint_radius_m < 0:
             raise ValueError("footprint_radius_m must not be negative")
+        if (self.footprint_half_width_m is None) != (
+            self.footprint_half_height_m is None
+        ):
+            raise ValueError("both rectangular footprint half extents are required")
+        if self.footprint_half_width_m is not None and (
+            self.footprint_half_width_m < 0
+            or self.footprint_half_height_m < 0
+        ):
+            raise ValueError("rectangular footprint half extents must not be negative")
+        if self.footprint_radius_m is not None and self.footprint_half_width_m is not None:
+            raise ValueError("choose either a circular or rectangular footprint")
         if self.stride_cells <= 0:
             raise ValueError("stride_cells must be positive")
         if self.max_candidates is not None and self.max_candidates <= 0:
@@ -292,11 +334,20 @@ class CandidateViewpointGenerator:
                 yaw=float(self.yaw_rad),
                 pitch=float(self.pitch_rad),
             )
-            visible = grid.cells_within_radius(
-                viewpoint.x,
-                viewpoint.y,
-                self.resolved_footprint_radius_m,
-            )
+            if self.footprint_half_width_m is not None:
+                visible = grid.cells_within_oriented_rectangle(
+                    viewpoint.x,
+                    viewpoint.y,
+                    float(self.footprint_half_width_m),
+                    float(self.footprint_half_height_m),
+                    yaw_rad=viewpoint.yaw,
+                )
+            else:
+                visible = grid.cells_within_radius(
+                    viewpoint.x,
+                    viewpoint.y,
+                    self.resolved_footprint_radius_m,
+                )
             candidates.append(ViewpointCandidate(
                 candidate_id=f"candidate:{cell.cell_id}",
                 viewpoint=viewpoint,

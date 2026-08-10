@@ -9,14 +9,19 @@
   "units": "meters",
   "sensor_profile": "x500_gsi_rgbd_nadir_longrange",
   "search": {
-    "flight_altitude_m": 70.0,
-    "sensor_footprint_radius_m": 40.0,
+    "flight_altitude_m": 30.0,
+    "sensor_footprint_model": "pinhole_nadir_rectangle",
+    "horizontal_fov_rad": 1.0472,
+    "image_width_px": 160,
+    "image_height_px": 120,
+    "footprint_scale": 0.95,
     "grid_resolution_m": 10.0,
     "max_viewpoints": 60
   },
   "safety": {
     "maximum_building_height_m": 55.1,
-    "minimum_vertical_clearance_m": 14.9,
+    "building_horizontal_clearance_m": 3.0,
+    "building_route_planning": true,
     "excluded_target_regions": ["sunken_plaza"]
   },
   "sensor_capture": {

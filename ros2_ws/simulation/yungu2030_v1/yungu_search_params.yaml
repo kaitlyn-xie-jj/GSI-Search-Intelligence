@@ -9,7 +9,13 @@ gsi_search_node:
     area_max_y_m: 210.563126
     grid_resolution_m: 10.0
     flight_altitude_m: 30.0
-    sensor_footprint_radius_m: 30.0
+    # Zero selects a rectangular footprint computed from altitude and camera
+    # intrinsics. A positive value remains available as a legacy circle override.
+    sensor_footprint_radius_m: 0.0
+    camera_horizontal_fov_rad: 1.0472
+    camera_image_width_px: 160
+    camera_image_height_px: 120
+    planning_footprint_scale: 0.95
     max_viewpoints: 60
     search_time_budget_s: 1000.0
     min_confirmations: 2
@@ -49,8 +55,14 @@ gsi_search_node:
     minimum_observation_quality: 0.5
     minimum_negative_observation_quality: 0.5
     # At 30 m, unobstructed frames yielded roughly 2,000-3,000 projected
-    # ground samples.  Treat lower support as a partially blocked view.
+    # ground samples. Lower support is inconclusive, not proof of occlusion.
     minimum_projected_ground_points: 2000
+    # Keep the 30 m inspection altitude, but route horizontally around every
+    # building whose roof is not safely below the commanded flight segment.
+    building_route_planning_enabled: true
+    building_horizontal_clearance_m: 3.0
+    building_vertical_clearance_m: 2.0
+    building_corner_offset_m: 0.1
     require_detections: true
     require_point_cloud: true
     record_first_positive_detection_in_transit: true
@@ -97,6 +109,7 @@ gsi_search_node:
     battery_topic: /mavros/battery
     goal_pose_topic: /gsi/uav/goal_pose
     outcome_topic: /gsi/search/outcome
+    safety_status_topic: /gsi/uav/safety_status
     trace_output_path: /tmp/GSI/results/yungu2030_sensor_validation/search_trace.jsonl
 
 gsi_mavros_offboard_controller:
@@ -123,6 +136,24 @@ gsi_mavros_offboard_controller:
     # Yungu airframe limits speed, acceleration, and tilt for long search legs.
     horizontal_setpoint_speed_mps: 0.0
     horizontal_setpoint_max_lead_m: 0.0
+    # PX4 local odometry must agree with the Gazebo spawn before any setpoint
+    # streaming or arming request. This rejects stale estimator state such as
+    # the observed false initial altitude of 81.38 m.
+    initial_pose_expected_x_m: 0.0
+    initial_pose_expected_y_m: 0.0
+    initial_pose_expected_z_m: 0.25
+    initial_pose_horizontal_tolerance_m: 2.0
+    initial_pose_vertical_tolerance_m: 1.0
+    initial_pose_max_speed_mps: 1.0
+    # Require a sustained stable estimator state, not a handful of startup
+    # samples, before setpoint streaming and automatic arming can begin.
+    initial_pose_required_samples: 100
+    safety_area_min_x_m: -4.835387
+    safety_area_min_y_m: -10.610370
+    safety_area_max_x_m: 324.729980
+    safety_area_max_y_m: 210.563126
+    safety_area_margin_m: 5.0
+    safety_status_topic: /gsi/uav/safety_status
 
 gsi_color_target_detector:
   ros__parameters:

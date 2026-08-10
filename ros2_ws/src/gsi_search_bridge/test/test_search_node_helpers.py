@@ -9,6 +9,7 @@ from gsi_search_bridge.search_node import (
     _horizontal_position_uncertainty_m,
     _negative_update_rejection_reason,
     _new_visible_cell_count,
+    _nadir_footprint_half_extents,
     _projection_visibility_probability,
     _quality_after_sensor_skew,
     _replan_reason,
@@ -51,6 +52,19 @@ def test_projection_visibility_requires_enough_real_ground_points():
     assert _projection_visibility_probability(20, 10) == 1.0
 
 
+def test_nadir_footprint_uses_fov_aspect_ratio_and_safety_scale():
+    half_width, half_height = _nadir_footprint_half_extents(
+        altitude_m=30.0,
+        horizontal_fov_rad=math.pi / 3.0,
+        image_width_px=160,
+        image_height_px=120,
+        scale=0.95,
+    )
+
+    assert half_width == pytest.approx(16.4544827)
+    assert half_height == pytest.approx(12.3408620)
+
+
 def test_negative_update_rejection_reports_observation_failure():
     base = {
         "rgb_available": True,
@@ -67,7 +81,7 @@ def test_negative_update_rejection_reports_observation_failure():
     ) == "no_valid_point_projection"
     assert _negative_update_rejection_reason(
         **{**base, "projected_ground_point_count": 2}
-    ) == "blocked_view"
+    ) == "insufficient_ground_projection"
 
 
 def test_replan_hysteresis_suppresses_small_frequent_updates():

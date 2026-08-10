@@ -18,6 +18,7 @@ from rclpy.qos import (
     QoSProfile,
     QoSReliabilityPolicy,
 )
+from std_msgs.msg import String
 
 
 class MavrosOffboardController(Node):
@@ -45,6 +46,19 @@ class MavrosOffboardController(Node):
             "takeoff_altitude_tolerance_m": 0.3,
             "horizontal_setpoint_speed_mps": 0.0,
             "horizontal_setpoint_max_lead_m": 0.0,
+            "initial_pose_expected_x_m": 0.0,
+            "initial_pose_expected_y_m": 0.0,
+            "initial_pose_expected_z_m": 0.25,
+            "initial_pose_horizontal_tolerance_m": 2.0,
+            "initial_pose_vertical_tolerance_m": 1.0,
+            "initial_pose_max_speed_mps": 1.0,
+            "initial_pose_required_samples": 100,
+            "safety_area_min_x_m": -1.0e9,
+            "safety_area_min_y_m": -1.0e9,
+            "safety_area_max_x_m": 1.0e9,
+            "safety_area_max_y_m": 1.0e9,
+            "safety_area_margin_m": 5.0,
+            "safety_status_topic": "/gsi/uav/safety_status",
         }
         for name, value in defaults.items():
             self.declare_parameter(name, value)
@@ -71,6 +85,9 @@ class MavrosOffboardController(Node):
         self._last_reported_state = None
         self._last_goal_signature = None
         self._last_progress_report_s = float("-inf")
+        self._initial_pose_valid_samples = 0
+        self._offboard_achieved = False
+        self._safety_latched = False
 
         self._publisher = self.create_publisher(
             PoseStamped,
@@ -103,6 +120,11 @@ class MavrosOffboardController(Node):
             SetMode,
             self._parameter("set_mode_service"),
         )
+        self._safety_publisher = self.create_publisher(
+            String,
+            self._parameter("safety_status_topic"),
+            10,
+        )
         self.create_timer(1.0 / rate_hz, self._publish_setpoint)
         self.create_timer(0.2, self._manage_offboard)
         self.get_logger().info(
@@ -111,6 +133,16 @@ class MavrosOffboardController(Node):
 
     def _on_state(self, message: State) -> None:
         self._state = message
+        if message.armed and message.mode == "OFFBOARD":
+            self._offboard_achieved = True
+        elif (
+            self._offboard_achieved
+            and message.armed
+            and message.mode != "OFFBOARD"
+        ):
+            self._latch_safety_stop(
+                f"OFFBOARD mode lost to {message.mode or '<unset>'}"
+            )
         state_key = (message.connected, message.armed, message.mode)
         if state_key != self._last_reported_state:
             self.get_logger().info(
@@ -122,8 +154,30 @@ class MavrosOffboardController(Node):
     def _on_odom(self, message: Odometry) -> None:
         self._odom = message
         self._report_progress()
+        initial_odometry_is_plausible = self._initial_odometry_is_plausible(message)
+        if (
+            self._initial_pose is not None
+            and not self._state.armed
+            and not initial_odometry_is_plausible
+        ):
+            self._reset_initial_pose_after_unstable_odometry()
+        if self._initial_pose is not None:
+            violation = self._flight_safety_violation(message)
+            if violation is not None:
+                self._latch_safety_stop(violation)
+        if self._safety_latched:
+            return
         if self._initial_pose is not None:
             self._update_takeoff_state()
+            return
+
+        if not initial_odometry_is_plausible:
+            self._initial_pose_valid_samples = 0
+            return
+        self._initial_pose_valid_samples += 1
+        if self._initial_pose_valid_samples < int(
+            self._parameter("initial_pose_required_samples")
+        ):
             return
 
         initial = PoseStamped()
@@ -135,13 +189,46 @@ class MavrosOffboardController(Node):
         self._setpoint = copy.deepcopy(initial)
         self._apply_pending_goal()
         self.get_logger().info(
-            "Received initial ENU pose: "
+            "Received stable initial ENU pose: "
             f"x={initial.pose.position.x:.2f}, "
             f"y={initial.pose.position.y:.2f}, "
             f"z={initial.pose.position.z:.2f}"
         )
 
+    def _initial_odometry_is_plausible(self, message: Odometry) -> bool:
+        return _initial_odometry_is_plausible(
+            message,
+            expected_position=(
+                float(self._parameter("initial_pose_expected_x_m")),
+                float(self._parameter("initial_pose_expected_y_m")),
+                float(self._parameter("initial_pose_expected_z_m")),
+            ),
+            horizontal_tolerance_m=float(
+                self._parameter("initial_pose_horizontal_tolerance_m")
+            ),
+            vertical_tolerance_m=float(
+                self._parameter("initial_pose_vertical_tolerance_m")
+            ),
+            maximum_speed_mps=float(
+                self._parameter("initial_pose_max_speed_mps")
+            ),
+        )
+
+    def _reset_initial_pose_after_unstable_odometry(self) -> None:
+        self.get_logger().warning(
+            "Initial odometry became unstable before arming; withdrawing "
+            "setpoints and restarting the stability check"
+        )
+        self._initial_pose = None
+        self._setpoint = None
+        self._initial_pose_valid_samples = 0
+        self._prestream_count = 0
+        self._takeoff_complete = not bool(self._parameter("staged_takeoff"))
+
     def _on_goal(self, message: PoseStamped) -> None:
+        if self._safety_latched:
+            self.get_logger().error("Rejected GSI goal after safety stop")
+            return
         expected_frame = str(self._parameter("map_frame"))
         if message.header.frame_id and message.header.frame_id != expected_frame:
             self.get_logger().error(
@@ -244,6 +331,8 @@ class MavrosOffboardController(Node):
         self._prestream_count += 1
 
     def _manage_offboard(self) -> None:
+        if self._safety_latched:
+            return
         if not self._state.connected or self._odom is None:
             return
         if self._prestream_count < int(self._parameter("prestream_setpoint_count")):
@@ -278,6 +367,41 @@ class MavrosOffboardController(Node):
                 self._on_arm_response
             )
             self._last_request_s = now_s
+
+    def _flight_safety_violation(self, message: Odometry) -> Optional[str]:
+        position = message.pose.pose.position
+        map_x = float(position.x) + float(self._parameter("map_origin_x_m"))
+        map_y = float(position.y) + float(self._parameter("map_origin_y_m"))
+        margin = float(self._parameter("safety_area_margin_m"))
+        if not (
+            float(self._parameter("safety_area_min_x_m")) - margin
+            <= map_x
+            <= float(self._parameter("safety_area_max_x_m")) + margin
+            and float(self._parameter("safety_area_min_y_m")) - margin
+            <= map_y
+            <= float(self._parameter("safety_area_max_y_m")) + margin
+        ):
+            return f"map position ({map_x:.2f}, {map_y:.2f}) left safety bounds"
+        return None
+
+    def _latch_safety_stop(self, reason: str) -> None:
+        if self._safety_latched:
+            return
+        self._safety_latched = True
+        self._pending_goal = None
+        if self._odom is not None:
+            hold = PoseStamped()
+            hold.header.frame_id = str(self._parameter("map_frame"))
+            hold.pose = copy.deepcopy(self._odom.pose.pose)
+            if _quaternion_norm(hold.pose.orientation) < 1e-6:
+                hold.pose.orientation.w = 1.0
+            self._setpoint = hold
+        self.get_logger().error(
+            f"SAFETY STOP: {reason}; automatic OFFBOARD/arming recovery disabled"
+        )
+        status = String()
+        status.data = reason
+        self._safety_publisher.publish(status)
 
     def _on_mode_response(self, future) -> None:
         try:
@@ -329,6 +453,38 @@ def _pose_is_finite(message: PoseStamped) -> bool:
         message.pose.orientation.w,
     )
     return all(math.isfinite(float(value)) for value in values)
+
+
+def _initial_odometry_is_plausible(
+    message: Odometry,
+    *,
+    expected_position: tuple[float, float, float],
+    horizontal_tolerance_m: float,
+    vertical_tolerance_m: float,
+    maximum_speed_mps: float,
+) -> bool:
+    """Reject stale estimator state before it can become a takeoff setpoint."""
+    if min(horizontal_tolerance_m, vertical_tolerance_m, maximum_speed_mps) < 0:
+        raise ValueError("initial odometry tolerances must not be negative")
+    position = message.pose.pose.position
+    values = (position.x, position.y, position.z, *expected_position)
+    if not all(math.isfinite(float(value)) for value in values):
+        return False
+    horizontal_error = math.hypot(
+        float(position.x) - expected_position[0],
+        float(position.y) - expected_position[1],
+    )
+    vertical_error = abs(float(position.z) - expected_position[2])
+    return (
+        horizontal_error <= horizontal_tolerance_m
+        and vertical_error <= vertical_tolerance_m
+        and _odometry_speed_mps(message) <= maximum_speed_mps
+    )
+
+
+def _odometry_speed_mps(message: Odometry) -> float:
+    velocity = message.twist.twist.linear
+    return math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
 
 
 def _quaternion_norm(quaternion: object) -> float:

@@ -138,6 +138,35 @@ class CandidateViewpointTests(unittest.TestCase):
         self.assertIn(center.anchor_cell_id, center.visible_cell_ids)
         json.dumps(center.to_dict())
 
+    def test_rectangular_footprint_does_not_claim_cells_outside_vertical_fov(self):
+        generator = CandidateViewpointGenerator(
+            altitude_m=30.0,
+            footprint_half_width_m=21.0,
+            footprint_half_height_m=9.0,
+        )
+
+        candidates = generator.generate(self.grid)
+        center = next(item for item in candidates if item.anchor_cell_id == "Test-Area:r1:c1")
+
+        self.assertEqual(
+            center.visible_cell_ids,
+            ("Test-Area:r1:c0", "Test-Area:r1:c1", "Test-Area:r1:c2"),
+        )
+
+    def test_rotated_rectangle_uses_viewpoint_yaw(self):
+        visible = self.grid.cells_within_oriented_rectangle(
+            30.0,
+            30.0,
+            half_width_m=21.0,
+            half_height_m=9.0,
+            yaw_rad=math.pi / 2.0,
+        )
+
+        self.assertEqual(
+            {cell.cell_id for cell in visible},
+            {"Test-Area:r0:c1", "Test-Area:r1:c1", "Test-Area:r2:c1"},
+        )
+
     def test_stride_and_limit_bound_candidate_count(self):
         candidates = CandidateViewpointGenerator(
             altitude_m=20.0,

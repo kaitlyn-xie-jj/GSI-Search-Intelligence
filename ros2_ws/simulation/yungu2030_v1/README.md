@@ -20,9 +20,29 @@ The dedicated X500 model publishes the normal ROS contract at 10 Hz:
 /oakd1/depth/points
 ```
 
-Yungu has collision boxes up to 55.1 m tall. The first validation uses a 70 m
-flight altitude and a dedicated 90 m RGB-D clipping range. Its results must be
-reported separately from the 20 m default RGB-D benchmark.
+Yungu has collision boxes up to 55.1 m tall. This validation deliberately uses
+a 30 m flight altitude so the yellow van remains large enough in the nadir
+image. The search node therefore treats the semantic-map building rectangles
+as hard navigation obstacles: it rejects viewpoints within a 3 m inflated
+building boundary and routes intersecting flight segments around safe corners.
+Intermediate navigation waypoints do not create observations or belief
+updates. The RGB-D clipping range remains 90 m.
+
+The expected search footprint is derived from the 60 degree horizontal FOV,
+160x120 image geometry, flight altitude, and a 0.95 safety scale. At 30 m this
+is approximately `+/-16.45 m` by `+/-12.34 m`; the legacy 30 m radius is not
+used. Actual negative evidence still requires valid projected point-cloud
+support.
+
+The offboard adapter accepts the Gazebo spawn pose only after five plausible
+stationary odometry samples. Losing OFFBOARD after arming, exceeding 5 m/s, or
+leaving the map bounds latches a safety stop, disables automatic mode/arming
+recovery, and aborts the search with an explicit outcome.
+
+A low count of points projected onto the `z=0` ground plane is recorded as
+`insufficient_ground_projection`. It is inconclusive sensor support, not proof
+that the target is occluded, and it does not trigger an occlusion-inspection
+viewpoint.
 
 ## One complete trial
 
@@ -33,7 +53,8 @@ cd /mnt/c/Users/96981/Documents/Codex/2026-07-27/files-mentioned-by-the-user-sea
 bash ros2_ws/run_yungu2030_sensor_trial.sh
 ```
 
-The default evaluator-only yellow van is at `(175, 65, 0.4, 0)`, while the UAV
+The default evaluator-only yellow van is at `(220, 94, 0.4, 0)`, on the stable
+flight corridor previously observed between `(180, 84)` and `(260, 104)`. The UAV
 starts at `(42, 90, 0.25)`. Override a
 position only through the run environment, for example:
 

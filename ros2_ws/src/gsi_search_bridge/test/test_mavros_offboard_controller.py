@@ -2,14 +2,42 @@ import math
 import unittest
 
 from geometry_msgs.msg import Pose, PoseStamped
+from nav_msgs.msg import Odometry
 
 from gsi_search_bridge.mavros_offboard_controller import (
     _advance_horizontal_setpoint,
+    _initial_odometry_is_plausible,
     _limit_horizontal_setpoint_lead,
 )
 
 
 class HorizontalSetpointRampTests(unittest.TestCase):
+    def test_rejects_stale_initial_estimator_altitude(self):
+        odometry = Odometry()
+        odometry.pose.pose.position.z = 81.38
+
+        self.assertFalse(_initial_odometry_is_plausible(
+            odometry,
+            expected_position=(0.0, 0.0, 0.25),
+            horizontal_tolerance_m=2.0,
+            vertical_tolerance_m=1.0,
+            maximum_speed_mps=1.0,
+        ))
+
+    def test_accepts_stationary_odometry_at_gazebo_spawn(self):
+        odometry = Odometry()
+        odometry.pose.pose.position.x = 0.1
+        odometry.pose.pose.position.y = -0.1
+        odometry.pose.pose.position.z = 0.3
+
+        self.assertTrue(_initial_odometry_is_plausible(
+            odometry,
+            expected_position=(0.0, 0.0, 0.25),
+            horizontal_tolerance_m=2.0,
+            vertical_tolerance_m=1.0,
+            maximum_speed_mps=1.0,
+        ))
+
     def test_limits_diagonal_step_without_changing_target_altitude(self):
         current = PoseStamped()
         target = PoseStamped()

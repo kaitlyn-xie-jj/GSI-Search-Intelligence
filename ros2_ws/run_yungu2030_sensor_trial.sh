@@ -6,8 +6,8 @@ GSI_ROOT="$(cd "${ROS2_WS}/.." && pwd)"
 VISIONFLOW_ROOT="${VISIONFLOW_ROOT:-/home/windylab/workspace/VisionFlow-PX4}"
 CONTAINER_NAME="${GSI_SITL_CONTAINER:-visionflow-px4-sitl}"
 OUTPUT_ROOT="${GSI_YUNGU_RESULTS_ROOT:-${GSI_ROOT}/results/yungu2030_sensor_validation/$(date -u +%Y%m%dT%H%M%SZ)}"
-TARGET_X_M="${GSI_TARGET_X_M:-175}"
-TARGET_Y_M="${GSI_TARGET_Y_M:-65}"
+TARGET_X_M="${GSI_TARGET_X_M:-220}"
+TARGET_Y_M="${GSI_TARGET_Y_M:-94}"
 TARGET_Z_M="${GSI_TARGET_Z_M:-0.4}"
 TARGET_YAW_RAD="${GSI_TARGET_YAW_RAD:-0}"
 CAPTURE_DURATION_S="${GSI_CAPTURE_DURATION_S:-240}"
@@ -17,6 +17,10 @@ SEARCH_TIME_BUDGET_S="${GSI_SEARCH_TIME_BUDGET_S:-$(python3 -c 'import sys; prin
 GUI_CONFIG="${GSI_YUNGU_GUI_CONFIG:-}"
 PRE_SEARCH_DELAY_S="${GSI_PRE_SEARCH_DELAY_S:-0}"
 
+if [[ -d "${OUTPUT_ROOT}" ]] && find "${OUTPUT_ROOT}" -mindepth 1 -print -quit | grep -q .; then
+    OUTPUT_ROOT="${OUTPUT_ROOT}-$(date -u +%Y%m%dT%H%M%SZ)"
+    echo "Requested result directory already contains artifacts; using ${OUTPUT_ROOT}"
+fi
 mkdir -p "${OUTPUT_ROOT}"
 
 cleanup() {
@@ -130,6 +134,17 @@ if [[ -n "${CAPTURE_PID:-}" ]]; then
     CAPTURE_PID=""
 fi
 docker cp "${CONTAINER_NAME}:/tmp/GSI/results/yungu2030_sensor_validation/." "${OUTPUT_ROOT}/" >/dev/null 2>&1 || true
+# Preserve PX4's native flight log before container cleanup. MAVROS may not
+# decode development-version PX4 event IDs, while the ULog retains the exact
+# estimator, attitude, actuator, and failure-detector state.
+PX4_ULOG_PATH="$(docker exec "${CONTAINER_NAME}" bash -lc \
+    "find /workspace/VisionFlow-PX4/build/px4_sitl_default/rootfs/log -type f -name '*.ulg' -printf '%T@ %p\\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2-" \
+    2>/dev/null || true)"
+if [[ -n "${PX4_ULOG_PATH}" ]]; then
+    mkdir -p "${OUTPUT_ROOT}/px4"
+    docker cp "${CONTAINER_NAME}:${PX4_ULOG_PATH}" "${OUTPUT_ROOT}/px4/flight.ulg" \
+        >/dev/null 2>&1 || true
+fi
 docker logs --tail 200 "${CONTAINER_NAME}" > "${OUTPUT_ROOT}/docker.log" 2>&1 || true
 
 if [[ ! -s "${OUTPUT_ROOT}/capture/rgb.mp4" && ! -s "${OUTPUT_ROOT}/capture/rgb.rgb24" ]]; then

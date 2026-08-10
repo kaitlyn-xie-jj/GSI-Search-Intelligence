@@ -18,6 +18,12 @@ from sensor_msgs.msg import BatteryState, CameraInfo, Image, Imu, PointCloud2
 from std_msgs.msg import String
 from vision_msgs.msg import Detection3DArray
 
+from .building_route_planner import (
+    BuildingObstacle,
+    load_building_obstacles,
+    plan_building_avoiding_route,
+    point_has_building_clearance,
+)
 from .pointcloud_projection import PointCloudGroundProjector
 from .scenario_context import load_search_scenario_context
 
@@ -53,6 +59,12 @@ class GsiSearchNode(Node):
         self._adapter: Optional[SearchObservationAdapter] = None
         self._grid: Optional[SearchGrid] = None
         self._commanded_viewpoint: Optional[Viewpoint] = None
+        self._navigation_goal: Optional[Viewpoint] = None
+        self._remaining_navigation_goals: Tuple[Viewpoint, ...] = ()
+        self._building_obstacles: Tuple[BuildingObstacle, ...] = ()
+        self._planning_footprint_radius_m = float(
+            self._parameter("sensor_footprint_radius_m")
+        )
         self._command_start_time_s = 0.0
         self._command_start_distance_m = 0.0
         self._command_start_battery: Optional[float] = None
@@ -67,6 +79,7 @@ class GsiSearchNode(Node):
         self._transit_suspect_inspection_counts: Dict[str, int] = {}
         self._verification_snapshot_count = 0
         self._outcome_published = False
+        self._safety_abort_reason: Optional[str] = None
         self._pointcloud_projector = PointCloudGroundProjector(
             camera_translation=(
                 float(self._parameter("camera_translation_x_m")),
@@ -99,6 +112,12 @@ class GsiSearchNode(Node):
             10,
         )
         self._create_sensor_subscriptions()
+        self.create_subscription(
+            String,
+            self._parameter("safety_status_topic"),
+            self._on_safety_status,
+            10,
+        )
         self.create_timer(0.1, self._tick)
         self.get_logger().info("GSI search node waiting for odometry and sensors")
 
@@ -113,6 +132,10 @@ class GsiSearchNode(Node):
             "grid_resolution_m": 10.0,
             "flight_altitude_m": 20.0,
             "sensor_footprint_radius_m": 15.0,
+            "camera_horizontal_fov_rad": 1.0471975512,
+            "camera_image_width_px": 160,
+            "camera_image_height_px": 120,
+            "planning_footprint_scale": 0.95,
             "max_viewpoints": 30,
             "search_time_budget_s": 180.0,
             "min_confirmations": 2,
@@ -151,6 +174,10 @@ class GsiSearchNode(Node):
             "minimum_observation_quality": 0.0,
             "minimum_negative_observation_quality": 0.5,
             "minimum_projected_ground_points": 10,
+            "building_route_planning_enabled": False,
+            "building_horizontal_clearance_m": 3.0,
+            "building_vertical_clearance_m": 2.0,
+            "building_corner_offset_m": 0.1,
             "require_detections": True,
             "require_point_cloud": False,
             "record_first_positive_detection_in_transit": False,
@@ -198,6 +225,7 @@ class GsiSearchNode(Node):
             "battery_topic": "/uav/battery_state",
             "goal_pose_topic": "/gsi/uav/goal_pose",
             "outcome_topic": "/gsi/search/outcome",
+            "safety_status_topic": "/gsi/uav/safety_status",
             "trace_output_path": "",
         }
         for name, value in defaults.items():
@@ -251,6 +279,15 @@ class GsiSearchNode(Node):
         if self._session is None:
             self._initialize_session()
         assert self._session is not None
+        if self._safety_abort_reason is not None and not self._session.completed:
+            self._session.abort(self._safety_abort_reason)
+            self._commanded_viewpoint = None
+            self._navigation_goal = None
+            self._remaining_navigation_goals = ()
+            self._write_trace("safety_abort", {
+                "reason": self._safety_abort_reason,
+                "viewpoint": _viewpoint_dict(self._actual_viewpoint()),
+            })
         if self._session.completed:
             self._publish_outcome()
             return
@@ -278,7 +315,8 @@ class GsiSearchNode(Node):
                 transit=True,
             ):
                 return
-        if not self._is_settled_at(self._commanded_viewpoint):
+        assert self._navigation_goal is not None
+        if not self._is_settled_at(self._navigation_goal):
             self._settled_since_s = None
             self._log_progress("traveling")
             return
@@ -289,6 +327,9 @@ class GsiSearchNode(Node):
         if now - self._settled_since_s < float(self._parameter("settle_time_s")):
             self._log_progress("settling")
             return
+        if self._navigation_goal.key != self._commanded_viewpoint.key:
+            self._advance_navigation_route()
+            return
         if not self._required_sensors_are_fresh():
             self._log_progress("waiting_for_sensors")
             return
@@ -298,6 +339,13 @@ class GsiSearchNode(Node):
             self._log_progress("waiting_for_observation_quality")
             return
         self._record_sensor_observation("settled_viewpoint")
+
+    def _on_safety_status(self, message: String) -> None:
+        reason = str(message.data).strip()
+        if not reason or self._safety_abort_reason is not None:
+            return
+        self._safety_abort_reason = f"PX4 safety stop: {reason}"
+        self.get_logger().error(self._safety_abort_reason)
 
     def _initialize_session(self) -> None:
         actual = self._actual_viewpoint()
@@ -333,11 +381,42 @@ class GsiSearchNode(Node):
         )
         grid = scenario.grid
         self._grid = grid
-        footprint = float(self._parameter("sensor_footprint_radius_m"))
-        candidates = CandidateViewpointGenerator(
-            altitude_m=float(self._parameter("flight_altitude_m")),
-            footprint_radius_m=footprint,
-        ).generate(grid)
+        if bool(self._parameter("building_route_planning_enabled")):
+            self._building_obstacles = load_building_obstacles(
+                str(self._parameter("semantic_map_path"))
+            )
+        configured_radius = float(self._parameter("sensor_footprint_radius_m"))
+        footprint_half_extents = None
+        if configured_radius > 0:
+            self._planning_footprint_radius_m = configured_radius
+        else:
+            footprint_half_extents = _nadir_footprint_half_extents(
+                altitude_m=float(self._parameter("flight_altitude_m")),
+                horizontal_fov_rad=float(
+                    self._parameter("camera_horizontal_fov_rad")
+                ),
+                image_width_px=int(self._parameter("camera_image_width_px")),
+                image_height_px=int(self._parameter("camera_image_height_px")),
+                scale=float(self._parameter("planning_footprint_scale")),
+            )
+            self._planning_footprint_radius_m = min(footprint_half_extents)
+        generator_kwargs = {
+            "altitude_m": float(self._parameter("flight_altitude_m")),
+        }
+        if footprint_half_extents is None:
+            generator_kwargs["footprint_radius_m"] = configured_radius
+        else:
+            generator_kwargs.update({
+                "footprint_half_width_m": footprint_half_extents[0],
+                "footprint_half_height_m": footprint_half_extents[1],
+            })
+        candidates = CandidateViewpointGenerator(**generator_kwargs).generate(grid)
+        unfiltered_candidate_count = len(candidates)
+        if self._building_obstacles:
+            candidates = tuple(
+                candidate for candidate in candidates
+                if self._viewpoint_has_building_clearance(candidate.viewpoint)
+            )
         sensor_model = BinarySensorModel(
             detection_probability=float(self._parameter("sensor_detection_probability")),
             false_positive_probability=float(
@@ -447,7 +526,7 @@ class GsiSearchNode(Node):
         self._adapter = SearchObservationAdapter(
             grid,
             target_query=str(self._parameter("target_query")),
-            fallback_footprint_radius_m=footprint,
+            fallback_footprint_radius_m=self._planning_footprint_radius_m,
             maximum_sensor_skew_s=float(self._parameter("maximum_sensor_skew_s")),
             minimum_negative_observation_quality=float(
                 self._parameter("minimum_negative_observation_quality")
@@ -482,12 +561,24 @@ class GsiSearchNode(Node):
         self.get_logger().info(
             f"Initialized {policy_type.__name__} with "
             f"{len(candidates)} candidate viewpoints; "
+            f"building_filtered={unfiltered_candidate_count - len(candidates)}; "
+            f"building_obstacles={len(self._building_obstacles)}; "
+            f"planning_footprint_radius_m={self._planning_footprint_radius_m:.2f}; "
+            f"planning_footprint_half_extents_m={footprint_half_extents}; "
             f"semantics={scenario.policy_metadata['semantic_map_loaded']}, "
             f"prior={scenario.policy_metadata['prior_loaded']}"
         )
 
     def _start_viewpoint_action(self, viewpoint: Viewpoint) -> None:
+        route = self._plan_navigation_route(self._actual_viewpoint(), viewpoint)
+        if route is None:
+            raise RuntimeError(
+                "No collision-free building route to selected viewpoint "
+                f"({viewpoint.x:.2f}, {viewpoint.y:.2f}, {viewpoint.z:.2f})"
+            )
         self._commanded_viewpoint = viewpoint
+        self._navigation_goal = route[0]
+        self._remaining_navigation_goals = route[1:]
         self._command_start_time_s = self._now_s()
         self._command_start_distance_m = self._odometry_distance_m
         self._command_start_battery = self._battery_percentage
@@ -495,7 +586,7 @@ class GsiSearchNode(Node):
         self._observation_checkpoint_distance_m = self._command_start_distance_m
         self._observation_checkpoint_battery = self._command_start_battery
         self._settled_since_s = None
-        self._publish_goal(viewpoint)
+        self._publish_goal(self._navigation_goal)
         decision = self._session.pending_policy_metadata if self._session else {}
         self.get_logger().info(
             "Selected viewpoint "
@@ -503,19 +594,93 @@ class GsiSearchNode(Node):
             f"verification_mode={bool(decision.get('verification_mode'))}; "
             f"verification_cell={decision.get('verification_cell_id')}; "
             f"transit_suspect_mode={bool(decision.get('transit_suspect_inspection_mode'))}; "
-            f"transit_suspect_cell={decision.get('transit_suspect_cell_id')}"
+            f"transit_suspect_cell={decision.get('transit_suspect_cell_id')}; "
+            f"route_segments={len(route)}"
         )
         self._write_trace("command", {
             "step_index": self._session.state.step_index if self._session else 0,
             "commanded_viewpoint": _viewpoint_dict(viewpoint),
+            "navigation_route": [_viewpoint_dict(item) for item in route],
         })
 
     def _republish_goal_if_due(self) -> None:
         assert self._commanded_viewpoint is not None
+        assert self._navigation_goal is not None
         if self._now_s() - self._last_goal_publish_s >= float(
             self._parameter("goal_republish_interval_s")
         ):
-            self._publish_goal(self._commanded_viewpoint)
+            self._publish_goal(self._navigation_goal)
+
+    def _advance_navigation_route(self) -> None:
+        assert self._navigation_goal is not None
+        reached = self._navigation_goal
+        if not self._remaining_navigation_goals:
+            return
+        self._navigation_goal = self._remaining_navigation_goals[0]
+        self._remaining_navigation_goals = self._remaining_navigation_goals[1:]
+        self._settled_since_s = None
+        self._publish_goal(self._navigation_goal)
+        self.get_logger().info(
+            "Reached navigation waypoint "
+            f"({reached.x:.2f}, {reached.y:.2f}, {reached.z:.2f}); "
+            "continuing to "
+            f"({self._navigation_goal.x:.2f}, {self._navigation_goal.y:.2f}, "
+            f"{self._navigation_goal.z:.2f})"
+        )
+        self._write_trace("navigation_waypoint", {
+            "reached": _viewpoint_dict(reached),
+            "next_navigation_goal": _viewpoint_dict(self._navigation_goal),
+            "final_viewpoint": _viewpoint_dict(self._commanded_viewpoint),
+            "remaining_segments": 1 + len(self._remaining_navigation_goals),
+        })
+
+    def _plan_navigation_route(
+        self,
+        start: Viewpoint,
+        goal: Viewpoint,
+    ) -> Optional[Tuple[Viewpoint, ...]]:
+        if not bool(self._parameter("building_route_planning_enabled")):
+            return (goal,)
+        points = plan_building_avoiding_route(
+            (start.x, start.y, start.z),
+            (goal.x, goal.y, goal.z),
+            self._building_obstacles,
+            horizontal_clearance_m=float(
+                self._parameter("building_horizontal_clearance_m")
+            ),
+            vertical_clearance_m=float(
+                self._parameter("building_vertical_clearance_m")
+            ),
+            corner_offset_m=float(self._parameter("building_corner_offset_m")),
+            route_bounds=(
+                float(self._parameter("area_min_x_m")),
+                float(self._parameter("area_min_y_m")),
+                float(self._parameter("area_max_x_m")),
+                float(self._parameter("area_max_y_m")),
+            ),
+        )
+        if points is None:
+            return None
+        route = []
+        previous = start
+        for index, point in enumerate(points):
+            final = index == len(points) - 1
+            yaw = goal.yaw if final else math.atan2(point[1] - previous.y, point[0] - previous.x)
+            route.append(Viewpoint(point[0], point[1], point[2], yaw, goal.pitch))
+            previous = route[-1]
+        return tuple(route)
+
+    def _viewpoint_has_building_clearance(self, viewpoint: Viewpoint) -> bool:
+        return point_has_building_clearance(
+            (viewpoint.x, viewpoint.y, viewpoint.z),
+            self._building_obstacles,
+            horizontal_clearance_m=float(
+                self._parameter("building_horizontal_clearance_m")
+            ),
+            vertical_clearance_m=float(
+                self._parameter("building_vertical_clearance_m")
+            ),
+        )
 
     def _publish_goal(self, viewpoint: Viewpoint) -> None:
         message = PoseStamped()
@@ -602,6 +767,12 @@ class GsiSearchNode(Node):
                     name: item[1] for name, item in fresh.items()
                 },
                 "projected_ground_point_count": len(visible_ground_points),
+                "projection_support_status": (
+                    "sufficient"
+                    if len(visible_ground_points) >= minimum_projected_points
+                    else "insufficient"
+                ),
+                "geometric_occlusion_confirmed": False,
             },
         )
         observation = self._adapter.adapt(frame, self._commanded_viewpoint)
@@ -800,6 +971,8 @@ class GsiSearchNode(Node):
         self._observation_checkpoint_battery = self._battery_percentage
         if not transit or replan_reason is not None or self._session.completed:
             self._commanded_viewpoint = None
+            self._navigation_goal = None
+            self._remaining_navigation_goals = ()
             self._settled_since_s = None
         if self._session.completed:
             self._publish_outcome()
@@ -811,7 +984,7 @@ class GsiSearchNode(Node):
         state: object,
     ) -> Optional[Tuple[str, float]]:
         if (
-            observation.negative_update_rejection_reason != "blocked_view"
+            observation.negative_update_rejection_reason != "geometric_occlusion"
             or self._grid is None
             or not state.belief
         ):
@@ -821,7 +994,7 @@ class GsiSearchNode(Node):
             for cell in self._grid.cells_within_radius(
                 observation.viewpoint.x,
                 observation.viewpoint.y,
-                float(self._parameter("sensor_footprint_radius_m")),
+                self._planning_footprint_radius_m,
             )
         }
         inspection_limit = int(
@@ -1148,8 +1321,9 @@ class GsiSearchNode(Node):
             return
         self._last_progress_log_s = now
         assert self._commanded_viewpoint is not None
+        assert self._navigation_goal is not None
         actual = self._actual_viewpoint()
-        position_error, speed = self._motion_errors(self._commanded_viewpoint)
+        position_error, speed = self._motion_errors(self._navigation_goal)
         sensor_ages = {
             name: round(max(0.0, now - item[2]), 3)
             for name, item in self._latest.items()
@@ -1157,8 +1331,8 @@ class GsiSearchNode(Node):
         }
         self.get_logger().info(
             f"Search gate={gate}; actual=({actual.x:.2f}, {actual.y:.2f}, {actual.z:.2f}); "
-            f"target=({self._commanded_viewpoint.x:.2f}, "
-            f"{self._commanded_viewpoint.y:.2f}, {self._commanded_viewpoint.z:.2f}); "
+            f"target=({self._navigation_goal.x:.2f}, "
+            f"{self._navigation_goal.y:.2f}, {self._navigation_goal.z:.2f}); "
             f"position_error_m={position_error:.2f}; speed_mps={speed:.2f}; "
             f"sensor_age_s={sensor_ages}"
         )
@@ -1313,6 +1487,28 @@ def _projection_visibility_probability(
     )
 
 
+def _nadir_footprint_half_extents(
+    *,
+    altitude_m: float,
+    horizontal_fov_rad: float,
+    image_width_px: int,
+    image_height_px: int,
+    scale: float = 1.0,
+) -> Tuple[float, float]:
+    """Compute a conservative flat-ground footprint from pinhole intrinsics."""
+    if altitude_m <= 0:
+        raise ValueError("altitude_m must be positive")
+    if not 0 < horizontal_fov_rad < math.pi:
+        raise ValueError("horizontal_fov_rad must be within (0, pi)")
+    if image_width_px <= 0 or image_height_px <= 0:
+        raise ValueError("camera image dimensions must be positive")
+    if not 0 < scale <= 1:
+        raise ValueError("planning footprint scale must be within (0, 1]")
+    half_width = altitude_m * math.tan(horizontal_fov_rad / 2.0)
+    half_height = half_width * image_height_px / image_width_px
+    return half_width * scale, half_height * scale
+
+
 def _negative_update_rejection_reason(
     *,
     rgb_available: bool,
@@ -1328,7 +1524,7 @@ def _negative_update_rejection_reason(
     if not point_cloud_available or projected_ground_point_count <= 0:
         return "no_valid_point_projection"
     if projected_ground_point_count < minimum_projected_ground_points:
-        return "blocked_view"
+        return "insufficient_ground_projection"
     if observation_quality < minimum_observation_quality:
         return "insufficient_observation_quality"
     return None
