@@ -133,7 +133,7 @@ elif [[ "${INSTALL_YOLO_DEPS}" == "1" ]]; then
         "source /opt/ros/humble/setup.bash; python3 -c '${VISION_STACK_CHECK}'"
     if [[ "${CACHE_YOLO_IMAGE}" == "1" ]]; then
         echo "[GSI 1/4] Saving dependencies into local image ${SITL_IMAGE}; future runs will skip downloads."
-        docker commit "${CONTAINER_NAME}" "${SITL_IMAGE}" >/dev/null
+        docker commit --pause=false "${CONTAINER_NAME}" "${SITL_IMAGE}" >/dev/null
     fi
 else
     echo "The container ROS/YOLO environment is missing or incompatible." >&2

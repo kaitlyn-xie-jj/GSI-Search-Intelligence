@@ -17,6 +17,13 @@ def main() -> None:
     args = parser.parse_args()
     if args.scale < 1:
         parser.error("--scale must be at least 1")
+    cv2.namedWindow(args.title, cv2.WINDOW_NORMAL)
+    cv2.resizeWindow(args.title, args.width * args.scale, args.height * args.scale)
+    cv2.moveWindow(args.title, 20, 20)
+    try:
+        cv2.setWindowProperty(args.title, cv2.WND_PROP_TOPMOST, 1)
+    except cv2.error:
+        pass
     frame_bytes = args.width * args.height * 3
     while True:
         data = sys.stdin.buffer.read(frame_bytes)

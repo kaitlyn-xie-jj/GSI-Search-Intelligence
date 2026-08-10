@@ -47,7 +47,7 @@ a 90-degree confirmation view requires a controllable gimbal or a second
 camera and is deliberately not claimed by this version.
 
 The default search rectangle is the central open courtyard enclosed by campus
-buildings: `x=[140, 210]`, `y=[65, 105]`. Navigation may use the full map
+buildings: `x=[140, 210]`, `y=[70, 100]`. Navigation may use the full map
 bounds so the UAV can enter from its spawn at `(42, 90)`. The default SUV pose
 is the collision-free courtyard point `(175, 85, 0.4)`.
 Re-run the geometry, route, ideal-visibility, and recovery audit without
