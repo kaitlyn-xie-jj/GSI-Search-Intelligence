@@ -183,7 +183,17 @@ class CoveragePolicy(SearchPolicy):
         points: List[Tuple[float, float]] = []
         for cell in ordered:
             x, y = cell.center
-            points.extend(((x, y), (x - offset, y), (x + offset, y), (x, y - offset), (x, y + offset)))
+            points.extend((
+                (x, y),
+                (x - offset, y),
+                (x + offset, y),
+                (x, y - offset),
+                (x, y + offset),
+                (x - offset, y - offset),
+                (x - offset, y + offset),
+                (x + offset, y - offset),
+                (x + offset, y + offset),
+            ))
         candidates = self._to_viewpoints(tuple(dict.fromkeys(points)), altitude)
         if self.viewpoint_filter is not None:
             candidates = tuple(item for item in candidates if self.viewpoint_filter(item))

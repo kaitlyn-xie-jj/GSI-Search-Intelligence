@@ -11,7 +11,7 @@ building route planner.
 
 After the primary route, searchable cells whose best observation quality is
 below 0.5 become deferred gaps. Recovery viewpoints approach each gap from its
-center and four offset directions; unsafe points are filtered and their flight
+center and eight offset directions; unsafe points are filtered and their flight
 legs still route around buildings. Cells blocked by semantic-map restrictions
 are excluded from the completion denominator.
 
@@ -36,6 +36,22 @@ The current PX4 model still has one fixed nadir RGB-D camera. Coverage and
 YOLO are runnable with that camera. A true 45-degree search view followed by
 a 90-degree confirmation view requires a controllable gimbal or a second
 camera and is deliberately not claimed by this version.
+
+The default search rectangle is the offline-validated east half of Yungu:
+`x=[159.9472965, 324.729980]`, `y=[-10.610370, 210.563126]`. Navigation may
+use the full map bounds so the UAV can enter from its spawn at `(42, 90)`.
+Re-run the geometry, route, ideal-visibility, and recovery audit without
+starting Gazebo:
+
+```bash
+PYTHONPATH=. python3 run/validate_yungu_coverage_offline.py
+```
+
+The validated route contains 309 primary viewpoints and 54 ideal-visibility
+recovery viewpoints. All 231 searchable cells become covered; 160 restricted
+cells are excluded and no deferred cell remains. The collision-free route is
+approximately 5.91 km including recovery and contains 80 obstacle-detour
+waypoints.
 
 This scenario joins the local Yungu CAD world to the existing PX4 X500 search
 stack. It is a simulator validation using rendered Gazebo RGB-D data, not a

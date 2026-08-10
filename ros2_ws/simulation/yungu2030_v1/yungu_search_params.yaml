@@ -4,10 +4,20 @@ gsi_search_node:
     target_query: car
     search_policy: coverage
     area_id: yungu2030_local_origin
-    area_min_x_m: -4.835387
+    # Offline-validated east half of Yungu. It contains the default target at
+    # (220, 94) while cutting the full-map coverage workload roughly in half.
+    area_min_x_m: 159.9472965
     area_min_y_m: -10.610370
     area_max_x_m: 324.729980
     area_max_y_m: 210.563126
+    # Search bounds and navigation bounds are deliberately separate: the UAV
+    # starts at (42, 90), outside the east-half search rectangle, and must fly
+    # through the full known-safe map to reach its closest sweep endpoint.
+    navigation_bounds_enabled: true
+    navigation_min_x_m: -4.835387
+    navigation_min_y_m: -10.610370
+    navigation_max_x_m: 324.729980
+    navigation_max_y_m: 210.563126
     grid_resolution_m: 10.0
     flight_altitude_m: 10.0
     # Zero selects a rectangular footprint computed from altitude and camera

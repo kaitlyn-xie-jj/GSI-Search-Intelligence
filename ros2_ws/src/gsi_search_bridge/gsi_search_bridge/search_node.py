@@ -131,6 +131,11 @@ class GsiSearchNode(Node):
             "area_min_y_m": -40.0,
             "area_max_x_m": 50.0,
             "area_max_y_m": 40.0,
+            "navigation_bounds_enabled": False,
+            "navigation_min_x_m": -50.0,
+            "navigation_min_y_m": -40.0,
+            "navigation_max_x_m": 50.0,
+            "navigation_max_y_m": 40.0,
             "grid_resolution_m": 10.0,
             "flight_altitude_m": 20.0,
             "sensor_footprint_radius_m": 15.0,
@@ -483,10 +488,7 @@ class GsiSearchNode(Node):
                     if float(self._parameter("coverage_recovery_offset_m")) > 0
                     else None
                 ),
-                viewpoint_filter=(
-                    self._viewpoint_has_building_clearance
-                    if self._building_obstacles else None
-                ),
+                viewpoint_filter=self._viewpoint_is_coverage_safe,
             )
             policy_type = CoveragePolicy
         elif policy_name in {"active", "adaptive_active", "lookahead_active"}:
@@ -712,12 +714,7 @@ class GsiSearchNode(Node):
                 self._parameter("building_vertical_clearance_m")
             ),
             corner_offset_m=float(self._parameter("building_corner_offset_m")),
-            route_bounds=(
-                float(self._parameter("area_min_x_m")),
-                float(self._parameter("area_min_y_m")),
-                float(self._parameter("area_max_x_m")),
-                float(self._parameter("area_max_y_m")),
-            ),
+            route_bounds=self._navigation_bounds(),
         )
         if points is None:
             return None
@@ -730,6 +727,21 @@ class GsiSearchNode(Node):
             previous = route[-1]
         return tuple(route)
 
+    def _navigation_bounds(self) -> Tuple[float, float, float, float]:
+        if bool(self._parameter("navigation_bounds_enabled")):
+            return (
+                float(self._parameter("navigation_min_x_m")),
+                float(self._parameter("navigation_min_y_m")),
+                float(self._parameter("navigation_max_x_m")),
+                float(self._parameter("navigation_max_y_m")),
+            )
+        return (
+            float(self._parameter("area_min_x_m")),
+            float(self._parameter("area_min_y_m")),
+            float(self._parameter("area_max_x_m")),
+            float(self._parameter("area_max_y_m")),
+        )
+
     def _viewpoint_has_building_clearance(self, viewpoint: Viewpoint) -> bool:
         return point_has_building_clearance(
             (viewpoint.x, viewpoint.y, viewpoint.z),
@@ -740,6 +752,14 @@ class GsiSearchNode(Node):
             vertical_clearance_m=float(
                 self._parameter("building_vertical_clearance_m")
             ),
+        )
+
+    def _viewpoint_is_coverage_safe(self, viewpoint: Viewpoint) -> bool:
+        x_min, y_min, x_max, y_max = self._navigation_bounds()
+        return (
+            x_min <= viewpoint.x <= x_max
+            and y_min <= viewpoint.y <= y_max
+            and self._viewpoint_has_building_clearance(viewpoint)
         )
 
     def _publish_goal(self, viewpoint: Viewpoint) -> None:
