@@ -1,9 +1,11 @@
 import math
 import unittest
+from dataclasses import replace
 
 from modules.search_intelligence import (
     CoveragePolicy,
     SearchObservation,
+    SearchGrid,
     SearchState,
     SearchTask,
     Viewpoint,
@@ -57,7 +59,10 @@ class CoveragePolicyTests(unittest.TestCase):
         current = Viewpoint(0.0, 0.0, 42.0, 0.0)
         state = SearchState.initial(self.task, belief={}, current_viewpoint=current)
 
-        viewpoints = CoveragePolicy(pass_spacing_m=20.0).plan(state)
+        viewpoints = CoveragePolicy(
+            pass_spacing_m=20.0,
+            route_start_hint=current,
+        ).plan(state)
 
         self.assertTrue(viewpoints)
         self.assertTrue(all(item.z == 42.0 for item in viewpoints))
@@ -68,12 +73,24 @@ class CoveragePolicyTests(unittest.TestCase):
             self.task, belief={}, current_viewpoint=current
         )
 
-        viewpoints = CoveragePolicy(pass_spacing_m=20.0).plan(state)
+        viewpoints = CoveragePolicy(
+            pass_spacing_m=20.0,
+            route_start_hint=current,
+        ).plan(state)
 
         self.assertLess(
             math.hypot(viewpoints[0].x - current.x, viewpoints[0].y - current.y),
             math.hypot(viewpoints[-1].x - current.x, viewpoints[-1].y - current.y),
         )
+
+        advanced = state.advance(
+            SearchObservation(viewpoint=viewpoints[0], timestamp_s=1.0)
+        )
+        remaining = CoveragePolicy(
+            pass_spacing_m=20.0,
+            route_start_hint=current,
+        ).plan(advanced)
+        self.assertEqual(remaining[0].key, viewpoints[1].key)
 
     def test_filters_unsafe_viewpoints(self):
         viewpoints = CoveragePolicy(
@@ -83,6 +100,51 @@ class CoveragePolicyTests(unittest.TestCase):
 
         self.assertTrue(viewpoints)
         self.assertTrue(all(item.x < 50.0 for item in viewpoints))
+
+    def test_recovery_visits_uncovered_cells_after_primary_route(self):
+        grid = SearchGrid.from_task(self.task, resolution_m=20.0)
+        policy = CoveragePolicy(
+            pass_spacing_m=20.0,
+            altitude_m=25.0,
+            search_grid=grid,
+            recovery_enabled=True,
+            recovery_offset_m=5.0,
+        )
+        primary = policy.plan(self.state)
+        state = replace(
+            self.state,
+            visited_viewpoint_keys=tuple(item.key for item in primary),
+            observed_cell_quality={grid.searchable_cells[0].cell_id: 1.0},
+        )
+
+        recovery = policy.plan(state)
+        metadata = policy.decision_metadata(state, recovery[0])
+
+        self.assertTrue(recovery)
+        self.assertEqual(metadata["coverage_phase"], "recovery")
+        self.assertEqual(metadata["coverage_covered_cells"], 1)
+        self.assertEqual(
+            metadata["coverage_deferred_cells"],
+            len(grid.searchable_cells) - 1,
+        )
+
+    def test_recovery_finishes_when_all_searchable_cells_are_covered(self):
+        grid = SearchGrid.from_task(self.task, resolution_m=20.0)
+        policy = CoveragePolicy(
+            pass_spacing_m=20.0,
+            search_grid=grid,
+            recovery_enabled=True,
+        )
+        primary = policy.plan(self.state)
+        state = replace(
+            self.state,
+            visited_viewpoint_keys=tuple(item.key for item in primary),
+            observed_cell_quality={
+                cell.cell_id: 1.0 for cell in grid.searchable_cells
+            },
+        )
+
+        self.assertEqual(policy.plan(state), ())
 
     def test_unsupported_geometry_finishes_without_action(self):
         task = SearchTask.from_skill_params({

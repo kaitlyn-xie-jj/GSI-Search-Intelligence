@@ -17,9 +17,9 @@ gsi_search_node:
     camera_image_width_px: 160
     camera_image_height_px: 120
     planning_footprint_scale: 0.95
-    # Full-map 8 m sampling currently produces about 622 safe observation
-    # poses after building filtering. Keep headroom for smaller spacing.
-    max_viewpoints: 1500
+    # Full-map audit: 622 primary poses plus at most 1908 safe recovery
+    # candidates when every observation is inconclusive.
+    max_viewpoints: 3000
     search_time_budget_s: 12000.0
     min_confirmations: 2
     max_localization_error_m: 8.0
@@ -52,6 +52,11 @@ gsi_search_node:
     # change is required before this can truthfully become -0.785398 (45 deg).
     coverage_camera_pitch_rad: -1.570796
     coverage_start_from_nearest_endpoint: true
+    # After the primary route, revisit cells that never received a sufficiently
+    # clear observation. Alternate viewpoints approach each gap from four sides.
+    coverage_recovery_enabled: true
+    coverage_recovery_min_quality: 0.5
+    coverage_recovery_offset_m: 4.0
     # Half a grid cell is sufficient for a 40 m nadir footprint and avoids
     # treating PX4's slow final position convergence as a failed viewpoint.
     position_tolerance_m: 5.0

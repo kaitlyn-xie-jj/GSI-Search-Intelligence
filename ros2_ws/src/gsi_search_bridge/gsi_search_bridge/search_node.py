@@ -168,6 +168,9 @@ class GsiSearchNode(Node):
             "coverage_observation_spacing_m": 0.0,
             "coverage_camera_pitch_rad": -1.5707963267948966,
             "coverage_start_from_nearest_endpoint": True,
+            "coverage_recovery_enabled": False,
+            "coverage_recovery_min_quality": 0.5,
+            "coverage_recovery_offset_m": 0.0,
             "active_distance_scale_mode": "fixed",
             "active_distance_scale_m": 100.0,
             "position_tolerance_m": 0.75,
@@ -466,6 +469,19 @@ class GsiSearchNode(Node):
                 ),
                 start_from_nearest_endpoint=bool(
                     self._parameter("coverage_start_from_nearest_endpoint")
+                ),
+                route_start_hint=actual,
+                search_grid=grid,
+                recovery_enabled=bool(
+                    self._parameter("coverage_recovery_enabled")
+                ),
+                recovery_min_quality=float(
+                    self._parameter("coverage_recovery_min_quality")
+                ),
+                recovery_offset_m=(
+                    float(self._parameter("coverage_recovery_offset_m"))
+                    if float(self._parameter("coverage_recovery_offset_m")) > 0
+                    else None
                 ),
                 viewpoint_filter=(
                     self._viewpoint_has_building_clearance

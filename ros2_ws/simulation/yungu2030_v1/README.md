@@ -9,6 +9,12 @@ to the initial UAV pose. Building footprints remain hard obstacles: unsafe
 coverage endpoints are removed and connecting flight legs use the existing
 building route planner.
 
+After the primary route, searchable cells whose best observation quality is
+below 0.5 become deferred gaps. Recovery viewpoints approach each gap from its
+center and four offset directions; unsafe points are filtered and their flight
+legs still route around buildings. Cells blocked by semantic-map restrictions
+are excluded from the completion denominator.
+
 Vehicle detection is provided by `yolo_target_detector`. It runs an
 Ultralytics COCO model over `car`, `bus`, and `truck`, then reuses the RGB-D
 centroid localization contract to publish `vision_msgs/Detection3DArray` on
