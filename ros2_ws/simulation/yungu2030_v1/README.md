@@ -24,6 +24,11 @@ centroid localization contract to publish `vision_msgs/Detection3DArray` on
 bash ros2_ws/prepare_yolo_detector.sh
 ```
 
+The installer pins `setuptools>=77.0.3,<80`: ROS 2 Humble's `colcon-core 0.21`
+requires a version below 80, while the current Torch runtime requires at least
+77.0.3. It finishes with `pip check` so dependency conflicts fail before a
+simulation run.
+
 Copy the resulting `artifacts/models/yolo11n.pt` into
 `/tmp/GSI/models/yolo11n.pt` in the runtime container. Ultralytics is
 AGPL-3.0; deployment and redistribution must be reviewed accordingly.

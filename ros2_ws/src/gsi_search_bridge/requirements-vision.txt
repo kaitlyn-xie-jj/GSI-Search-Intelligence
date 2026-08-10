@@ -1,2 +1,5 @@
 # Ultralytics is AGPL-3.0; review license obligations before distribution.
+# ROS 2 Humble / colcon-core 0.21 requires setuptools below 80.
+setuptools>=77.0.3,<80
+cffi>=1.4.1
 ultralytics>=8.3,<9

@@ -5,8 +5,10 @@ ROS2_WS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODEL_DIR="${GSI_YOLO_MODEL_DIR:-${ROS2_WS}/../artifacts/models}"
 MODEL_NAME="${GSI_YOLO_MODEL_NAME:-yolo11n.pt}"
 
+python3 -m pip install "setuptools>=77.0.3,<80"
 python3 -m pip install -r \
     "${ROS2_WS}/src/gsi_search_bridge/requirements-vision.txt"
+python3 -m pip check
 mkdir -p "${MODEL_DIR}"
 python3 - "${MODEL_DIR}" "${MODEL_NAME}" <<'PY'
 import shutil
