@@ -147,7 +147,7 @@ set +e
 setsid timeout --foreground "${SEARCH_TIMEOUT_S}" \
     docker exec "${CONTAINER_NAME}" bash -lc \
         "cd /tmp/GSI/ros2_ws && GSI_SEARCH_TIME_BUDGET_S='${SEARCH_TIME_BUDGET_S}' GSI_RUNTIME_LOG=/tmp/GSI/results/yungu2030_sensor_validation/runtime.log bash run_yungu2030_search.sh" \
-    > "${OUTPUT_ROOT}/search_console.log" 2>&1 &
+    > >(tee "${OUTPUT_ROOT}/search_console.log") 2>&1 &
 SEARCH_PID=$!
 if [[ "${SHOW_CAMERA}" == "1" ]]; then
     setsid bash "${ROS2_WS}/view_yungu2030_camera.sh" "${CONTAINER_NAME}" &
