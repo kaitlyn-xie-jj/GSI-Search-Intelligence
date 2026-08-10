@@ -58,9 +58,13 @@ starting Gazebo:
 PYTHONPATH=. python3 run/validate_yungu_coverage_offline.py
 ```
 
-The 7 m route spacing is smaller than both planned camera footprint dimensions
-(about 10.97 m by 8.23 m at 10 m altitude), leaving overlap between adjacent
-viewpoints and adjacent passes rather than an uncovered seam.
+The flight altitude is 15 m. The 7 m route spacing is smaller than both
+planned camera footprint dimensions (about 16.45 m by 12.34 m), leaving
+overlap between adjacent viewpoints and adjacent passes rather than an
+uncovered seam. A first localized YOLO hit interrupts coverage for one
+alternate verification pose 5 m from the saved target estimate. That pose is
+chosen on the opposite side when safe and its yaw faces the estimate. A second
+hit completes the task; a negative verification resumes the remaining route.
 
 For a watched 600-second run with Gazebo and the live UAV RGB window:
 

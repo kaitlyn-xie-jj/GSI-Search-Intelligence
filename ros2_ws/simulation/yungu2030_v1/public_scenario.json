@@ -11,21 +11,21 @@
   "search": {
     "policy": "coverage",
     "target_query": "car",
-    "flight_altitude_m": 10.0,
+    "flight_altitude_m": 15.0,
     "sensor_footprint_model": "pinhole_nadir_rectangle",
     "horizontal_fov_rad": 1.0472,
     "image_width_px": 160,
     "image_height_px": 120,
     "footprint_scale": 0.95,
-    "grid_resolution_m": 10.0,
-    "coverage_pass_spacing_m": 8.0,
-    "coverage_observation_spacing_m": 8.0,
+    "grid_resolution_m": 7.0,
+    "coverage_pass_spacing_m": 7.0,
+    "coverage_observation_spacing_m": 7.0,
     "max_viewpoints": 3000,
     "bounds_enu_m": {
-      "min_x": 159.9472965,
-      "min_y": -10.610370,
-      "max_x": 324.729980,
-      "max_y": 210.563126
+      "min_x": 160.0,
+      "min_y": 62.0,
+      "max_x": 209.0,
+      "max_y": 72.0
     }
   },
   "safety": {
@@ -35,8 +35,8 @@
     "excluded_target_regions": ["sunken_plaza"]
   },
   "sensor_capture": {
-    "rgb_width_px": 640,
-    "rgb_height_px": 480,
+    "rgb_width_px": 160,
+    "rgb_height_px": 120,
     "rgb_fps": 10.0,
     "depth_maximum_range_m": 90.0
   },

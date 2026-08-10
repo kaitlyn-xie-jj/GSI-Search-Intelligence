@@ -28,6 +28,7 @@ class CoveragePolicy(SearchPolicy):
     recovery_enabled: bool = False
     recovery_min_quality: float = 0.5
     recovery_offset_m: Optional[float] = None
+    verification_offset_m: Optional[float] = None
 
     def __post_init__(self) -> None:
         if self.pass_spacing_m <= 0:
@@ -42,11 +43,16 @@ class CoveragePolicy(SearchPolicy):
             raise ValueError("recovery_min_quality must be within [0, 1]")
         if self.recovery_offset_m is not None and self.recovery_offset_m <= 0:
             raise ValueError("recovery_offset_m must be positive")
+        if self.verification_offset_m is not None and self.verification_offset_m <= 0:
+            raise ValueError("verification_offset_m must be positive")
         if self.recovery_enabled and self.search_grid is None:
             raise ValueError("recovery_enabled requires search_grid")
 
     def plan(self, state: SearchState) -> Tuple[Viewpoint, ...]:
         """Generate the unvisited portion of the deterministic coverage route."""
+        verification = self._verification_viewpoint(state)
+        if verification is not None:
+            return (verification,)
         viewpoints = self._primary_viewpoints(state)
         visited = set(state.visited_viewpoint_keys)
         remaining_primary = tuple(
@@ -79,8 +85,74 @@ class CoveragePolicy(SearchPolicy):
                 else "primary"
             ),
         }
+        verification = self._verification_viewpoint(state)
+        metadata.update({
+            "verification_mode": (
+                verification is not None and verification.key == viewpoint.key
+            ),
+            "verification_target_position": (
+                None if verification is None
+                else self._latest_detection_position(state)
+            ),
+        })
         metadata.update(self.coverage_status_counts(state))
         return metadata
+
+    def _verification_viewpoint(self, state: SearchState) -> Optional[Viewpoint]:
+        """Return one alternate view immediately after a primary positive."""
+        if self.verification_offset_m is None or not state.observations:
+            return None
+        # A completed verification (positive or negative) always returns to
+        # coverage. A later primary positive can create a new suspect.
+        if bool(state.policy_metadata.get("verification_mode")):
+            return None
+        latest = state.observations[-1]
+        detections = latest.matching_detections(
+            state.task.success_criteria.min_confidence
+        )
+        localized = tuple(
+            item for item in detections if item.estimated_position is not None
+        )
+        if not localized:
+            return None
+        target = max(localized, key=lambda item: item.confidence).estimated_position
+        assert target is not None
+        current = state.current_viewpoint or latest.viewpoint
+        base_angle = math.atan2(current.y - target[1], current.x - target[0])
+        # Prefer the opposite side of the suspect. Try deterministic alternate
+        # bearings when a building or navigation bound makes that pose unsafe.
+        for delta in (math.pi, math.pi / 2.0, -math.pi / 2.0, 0.0,
+                      3.0 * math.pi / 4.0, -3.0 * math.pi / 4.0,
+                      math.pi / 4.0, -math.pi / 4.0):
+            bearing = base_angle + delta
+            x = float(target[0]) + self.verification_offset_m * math.cos(bearing)
+            y = float(target[1]) + self.verification_offset_m * math.sin(bearing)
+            viewpoint = Viewpoint(
+                x=x,
+                y=y,
+                z=self._resolve_altitude(state, dict(state.task.search_area.geometry)),
+                yaw=math.atan2(float(target[1]) - y, float(target[0]) - x),
+                pitch=self.camera_pitch_rad,
+            )
+            if self.viewpoint_filter is None or self.viewpoint_filter(viewpoint):
+                return viewpoint
+        return None
+
+    @staticmethod
+    def _latest_detection_position(
+        state: SearchState,
+    ) -> Optional[Tuple[float, float, float]]:
+        if not state.observations:
+            return None
+        detections = state.observations[-1].matching_detections(
+            state.task.success_criteria.min_confidence
+        )
+        localized = tuple(
+            item for item in detections if item.estimated_position is not None
+        )
+        if not localized:
+            return None
+        return max(localized, key=lambda item: item.confidence).estimated_position
 
     def coverage_status_counts(self, state: SearchState) -> Dict[str, int]:
         if self.search_grid is None:

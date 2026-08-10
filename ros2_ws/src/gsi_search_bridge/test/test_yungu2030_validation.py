@@ -36,10 +36,12 @@ class ManifestAndStatisticsTests(unittest.TestCase):
         self.assertIn("area_min_y_m: 62.0", parameters)
         self.assertIn("area_max_x_m: 209.0", parameters)
         self.assertIn("area_max_y_m: 72.0", parameters)
+        self.assertIn("flight_altitude_m: 15.0", parameters)
         self.assertIn("grid_resolution_m: 7.0", parameters)
         self.assertIn("coverage_pass_spacing_m: 7.0", parameters)
         self.assertIn("coverage_observation_spacing_m: 7.0", parameters)
         self.assertIn("ground_plane_z_m: 0.28", parameters)
+        self.assertIn("verification_max_horizontal_offset_m: 5.0", parameters)
 
     def test_yungu_uses_px4_trajectory_control_baseline(self):
         parameters = SEARCH_PARAMS_PATH.read_text(encoding="utf-8")

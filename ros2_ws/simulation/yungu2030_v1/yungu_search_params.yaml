@@ -20,7 +20,7 @@ gsi_search_node:
     navigation_max_x_m: 324.729980
     navigation_max_y_m: 210.563126
     grid_resolution_m: 7.0
-    flight_altitude_m: 10.0
+    flight_altitude_m: 15.0
     # Zero selects a rectangular footprint computed from altitude and camera
     # intrinsics. A positive value remains available as a legacy circle override.
     sensor_footprint_radius_m: 0.0
@@ -35,7 +35,10 @@ gsi_search_node:
     min_confirmations: 2
     max_localization_error_m: 8.0
     verification_followup_limit: 1
-    verification_max_horizontal_offset_m: 1.0
+    # After the first localized YOLO hit, leave the lawnmower route once and
+    # observe the saved target position from the opposite side. A positive
+    # second view completes the search; a negative view resumes coverage.
+    verification_max_horizontal_offset_m: 5.0
     semantic_map_path: /workspace/VisionFlow-PX4/Tools/simulation/gz/worlds/yungu2030_semantic_map.json
     search_prior_path: simulation/yungu2030_v1/yungu_search_prior.json
     sensor_detection_probability: 0.85
@@ -55,8 +58,8 @@ gsi_search_node:
     active_candidate_frontier_fraction: 0.5
     active_planning_speed_mps: 1.5
     active_completion_time_reserve_s: 5.0
-    # Deterministic lawn-mower route. At 10 m and 60 deg HFOV the nominal
-    # cross-track footprint is about 11.5 m; 8 m keeps roughly 30% overlap.
+    # Deterministic lawn-mower route. At 15 m the scaled footprint is roughly
+    # 16.45 x 12.34 m, so 7 m keeps generous overlap in both directions.
     coverage_pass_spacing_m: 7.0
     coverage_observation_spacing_m: 7.0
     # The current airframe has a fixed nadir camera. A later gimbal/dual-camera
@@ -85,7 +88,7 @@ gsi_search_node:
     # samples per settled view in the latest SITL run. Require 200 so a valid
     # flat-road observation is accepted while sparse edge projections are not.
     minimum_projected_ground_points: 200
-    # Keep the 10 m inspection altitude, but route horizontally around every
+    # Keep the 15 m inspection altitude, but route horizontally around every
     # building whose roof is not safely below the commanded flight segment.
     building_route_planning_enabled: true
     building_horizontal_clearance_m: 3.0

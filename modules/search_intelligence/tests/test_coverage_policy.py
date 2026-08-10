@@ -8,6 +8,7 @@ from modules.search_intelligence import (
     SearchGrid,
     SearchState,
     SearchTask,
+    TargetDetection,
     Viewpoint,
 )
 
@@ -156,6 +157,60 @@ class CoveragePolicyTests(unittest.TestCase):
 
         self.assertEqual(policy.plan(state), ())
 
+    def test_positive_inserts_one_alternate_verification_then_resumes(self):
+        task = SearchTask.from_skill_params({
+            "task_id": "coverage-verification",
+            "area_token": "Parking-A",
+            "area": self.task.search_area.geometry,
+            "target_token": "car",
+            "target": {"class": "car"},
+            "min_confirmations": 2,
+        })
+        state = SearchState.initial(task, belief={})
+        policy = CoveragePolicy(
+            pass_spacing_m=20.0,
+            altitude_m=15.0,
+            verification_offset_m=5.0,
+        )
+        primary = policy.select_next(state)
+        self.assertIsNotNone(primary)
+        positive = SearchObservation(
+            viewpoint=primary,
+            timestamp_s=1.0,
+            detections=(TargetDetection(
+                label="car",
+                confidence=0.9,
+                estimated_position=(40.0, 30.0, 0.3),
+                entity_id="car-1",
+            ),),
+        )
+        state = state.advance(
+            positive,
+            policy_metadata=policy.decision_metadata(state, primary),
+        )
+
+        verification = policy.select_next(state)
+        metadata = policy.decision_metadata(state, verification)
+        self.assertTrue(metadata["verification_mode"])
+        self.assertEqual(metadata["verification_target_position"], (40.0, 30.0, 0.3))
+        self.assertAlmostEqual(
+            math.hypot(verification.x - 40.0, verification.y - 30.0),
+            5.0,
+        )
+        self.assertAlmostEqual(
+            verification.yaw,
+            math.atan2(30.0 - verification.y, 40.0 - verification.x),
+        )
+
+        state = state.advance(
+            SearchObservation(viewpoint=verification, timestamp_s=2.0),
+            policy_metadata=metadata,
+        )
+        resumed = policy.select_next(state)
+        self.assertIsNotNone(resumed)
+        self.assertFalse(policy.decision_metadata(state, resumed)["verification_mode"])
+        self.assertNotEqual(resumed.key, verification.key)
+
     def test_unsupported_geometry_finishes_without_action(self):
         task = SearchTask.from_skill_params({
             "task_id": "invalid-area",
@@ -172,6 +227,8 @@ class CoveragePolicyTests(unittest.TestCase):
             CoveragePolicy(pass_spacing_m=0.0)
         with self.assertRaises(ValueError):
             CoveragePolicy(observation_spacing_m=0.0)
+        with self.assertRaises(ValueError):
+            CoveragePolicy(verification_offset_m=0.0)
 
     def test_optional_observation_sampling_bounds_segment_length(self):
         viewpoints = CoveragePolicy(

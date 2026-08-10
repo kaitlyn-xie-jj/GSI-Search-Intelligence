@@ -488,6 +488,12 @@ class GsiSearchNode(Node):
                     if float(self._parameter("coverage_recovery_offset_m")) > 0
                     else None
                 ),
+                verification_offset_m=(
+                    float(self._parameter("verification_max_horizontal_offset_m"))
+                    if verification_limit > 0
+                    and float(self._parameter("verification_max_horizontal_offset_m")) > 0
+                    else None
+                ),
                 viewpoint_filter=self._viewpoint_is_coverage_safe,
             )
             policy_type = CoveragePolicy
