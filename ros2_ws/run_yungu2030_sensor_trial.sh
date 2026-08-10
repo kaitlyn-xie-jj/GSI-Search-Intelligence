@@ -168,7 +168,33 @@ if [[ "${SHOW_CAMERA}" == "1" ]]; then
     CAMERA_VIEW_PID=$!
 fi
 SEARCH_STATUS=""
+OPERATOR_REQUEST_HANDLED=0
 while kill -0 "${SEARCH_PID}" >/dev/null 2>&1; do
+    OPERATOR_REQUEST_COUNT="$(grep -c 'OPERATOR CONFIRMATION REQUIRED' "${OUTPUT_ROOT}/search_console.log" 2>/dev/null || true)"
+    if (( OPERATOR_REQUEST_COUNT > OPERATOR_REQUEST_HANDLED )); then
+        echo
+        echo "Vehicle candidate detected. UAV is hovering above it."
+        echo "Inspect the onboard RGB view in Gazebo."
+        while true; do
+            read -r -p "Is this the target vehicle? [y=yes / n=no]: " OPERATOR_ANSWER
+            case "${OPERATOR_ANSWER,,}" in
+                y|yes|correct)
+                    OPERATOR_MESSAGE=yes
+                    break
+                    ;;
+                n|no|wrong|incorrect)
+                    OPERATOR_MESSAGE=no
+                    break
+                    ;;
+                *)
+                    echo "Please enter y or n."
+                    ;;
+            esac
+        done
+        docker exec "${CONTAINER_NAME}" bash -lc \
+            "source /opt/ros/humble/setup.bash; source /tmp/GSI/ros2_ws/install/setup.bash; ros2 topic pub --once /gsi/operator_confirmation std_msgs/msg/String \"{data: '${OPERATOR_MESSAGE}'}\""
+        OPERATOR_REQUEST_HANDLED="${OPERATOR_REQUEST_COUNT}"
+    fi
     if docker exec "${CONTAINER_NAME}" bash -lc \
         "grep -q '\"event\": \"outcome\"' /tmp/GSI/results/yungu2030_sensor_validation/search_trace.jsonl 2>/dev/null"; then
         SEARCH_STATUS=0

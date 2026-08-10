@@ -22,9 +22,9 @@
     "coverage_observation_spacing_m": 7.0,
     "max_viewpoints": 3000,
     "bounds_enu_m": {
-      "min_x": 160.0,
-      "min_y": 62.0,
-      "max_x": 209.0,
+      "min_x": 90.0,
+      "min_y": 57.0,
+      "max_x": 140.0,
       "max_y": 72.0
     }
   },

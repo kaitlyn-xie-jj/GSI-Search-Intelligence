@@ -4,12 +4,12 @@ gsi_search_node:
     target_query: car
     search_policy: coverage
     area_id: yungu2030_local_origin
-    # Flat south road connector beside the central buildings. Its semantic
+    # Flat north road connector beside the central buildings. Its semantic
     # elevation is 0.27-0.30 m; unlike the adjacent sunken plaza, a single
     # ground plane is valid across this entire demonstration rectangle.
-    area_min_x_m: 160.0
-    area_min_y_m: 62.0
-    area_max_x_m: 209.0
+    area_min_x_m: 90.0
+    area_min_y_m: 57.0
+    area_max_x_m: 140.0
     area_max_y_m: 72.0
     # Search bounds and navigation bounds are deliberately separate: the UAV
     # starts at (42, 90), outside the courtyard search rectangle, and must fly
@@ -35,10 +35,11 @@ gsi_search_node:
     min_confirmations: 2
     max_localization_error_m: 8.0
     verification_followup_limit: 1
-    # After the first localized YOLO hit, leave the lawnmower route once and
-    # observe the saved target position from the opposite side. A positive
-    # second view completes the search; a negative view resumes coverage.
-    verification_max_horizontal_offset_m: 5.0
+    # Move essentially directly above the localized target. The tiny non-zero
+    # offset keeps the coverage policy's follow-up hook enabled.
+    verification_max_horizontal_offset_m: 0.01
+    operator_confirmation_enabled: true
+    operator_confirmation_topic: /gsi/operator_confirmation
     semantic_map_path: /workspace/VisionFlow-PX4/Tools/simulation/gz/worlds/yungu2030_semantic_map.json
     search_prior_path: simulation/yungu2030_v1/yungu_search_prior.json
     sensor_detection_probability: 0.85

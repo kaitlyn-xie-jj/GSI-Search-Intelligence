@@ -32,16 +32,21 @@ class ManifestAndStatisticsTests(unittest.TestCase):
     def test_visual_demo_uses_flat_road_and_overlapping_coverage(self):
         parameters = SEARCH_PARAMS_PATH.read_text(encoding="utf-8")
 
-        self.assertIn("area_min_x_m: 160.0", parameters)
-        self.assertIn("area_min_y_m: 62.0", parameters)
-        self.assertIn("area_max_x_m: 209.0", parameters)
+        self.assertIn("area_min_x_m: 90.0", parameters)
+        self.assertIn("area_min_y_m: 57.0", parameters)
+        self.assertIn("area_max_x_m: 140.0", parameters)
         self.assertIn("area_max_y_m: 72.0", parameters)
         self.assertIn("flight_altitude_m: 15.0", parameters)
         self.assertIn("grid_resolution_m: 7.0", parameters)
         self.assertIn("coverage_pass_spacing_m: 7.0", parameters)
         self.assertIn("coverage_observation_spacing_m: 7.0", parameters)
         self.assertIn("ground_plane_z_m: 0.28", parameters)
-        self.assertIn("verification_max_horizontal_offset_m: 5.0", parameters)
+        self.assertIn("verification_max_horizontal_offset_m: 0.01", parameters)
+        self.assertIn("operator_confirmation_enabled: true", parameters)
+        self.assertIn(
+            "operator_confirmation_topic: /gsi/operator_confirmation",
+            parameters,
+        )
 
     def test_yungu_uses_px4_trajectory_control_baseline(self):
         parameters = SEARCH_PARAMS_PATH.read_text(encoding="utf-8")

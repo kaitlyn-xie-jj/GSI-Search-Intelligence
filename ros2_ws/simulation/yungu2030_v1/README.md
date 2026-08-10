@@ -46,10 +46,10 @@ YOLO are runnable with that camera. A true 45-degree search view followed by
 a 90-degree confirmation view requires a controllable gimbal or a second
 camera and is deliberately not claimed by this version.
 
-The default search rectangle is the flat south road connector beside the
-central campus buildings: `x=[160, 209]`, `y=[62, 72]`. Its semantic elevation
+The default search rectangle is the flat north road connector beside the
+central campus buildings: `x=[90, 140]`, `y=[57, 72]`. Its semantic elevation
 is 0.27-0.30 m, so it deliberately excludes the adjacent sunken plaza. The
-default SUV pose `(180, 65, 0.28)` places the bottom of its collision box on
+default SUV pose `(115, 65, 0.28)` places the bottom of its collision box on
 that road surface.
 Re-run the geometry, route, ideal-visibility, and recovery audit without
 starting Gazebo:
@@ -61,10 +61,11 @@ PYTHONPATH=. python3 run/validate_yungu_coverage_offline.py
 The flight altitude is 15 m. The 7 m route spacing is smaller than both
 planned camera footprint dimensions (about 16.45 m by 12.34 m), leaving
 overlap between adjacent viewpoints and adjacent passes rather than an
-uncovered seam. A first localized YOLO hit interrupts coverage for one
-alternate verification pose 5 m from the saved target estimate. That pose is
-chosen on the opposite side when safe and its yaw faces the estimate. A second
-hit completes the task; a negative verification resumes the remaining route.
+uncovered seam. A first localized YOLO hit interrupts coverage and moves the
+UAV directly above the saved target estimate. It then hovers until the operator
+accepts or rejects the candidate in the launch terminal. The confirmation is
+recorded together with the current onboard image. Acceptance completes the
+task; rejection resumes the remaining route after the detector clears.
 
 For a watched 600-second run with Gazebo and the live UAV RGB window:
 

@@ -79,6 +79,9 @@ class GsiSearchNode(Node):
         self._transit_suspect_snapshot_count = 0
         self._transit_suspect_inspection_counts: Dict[str, int] = {}
         self._verification_snapshot_count = 0
+        self._operator_candidate_detections: Tuple[TargetDetection, ...] = ()
+        self._awaiting_operator_confirmation = False
+        self._operator_rejection_wait_for_clear = False
         self._outcome_published = False
         self._safety_abort_reason: Optional[str] = None
         self._pointcloud_projector = PointCloudGroundProjector(
@@ -119,6 +122,12 @@ class GsiSearchNode(Node):
             self._on_safety_status,
             10,
         )
+        self.create_subscription(
+            String,
+            self._parameter("operator_confirmation_topic"),
+            self._on_operator_confirmation,
+            10,
+        )
         self.create_timer(0.1, self._tick)
         self.get_logger().info("GSI search node waiting for odometry and sensors")
 
@@ -149,6 +158,8 @@ class GsiSearchNode(Node):
             "max_localization_error_m": 5.0,
             "verification_followup_limit": 0,
             "verification_max_horizontal_offset_m": 0.0,
+            "operator_confirmation_enabled": False,
+            "operator_confirmation_topic": "/gsi/operator_confirmation",
             "semantic_map_path": "",
             "search_prior_path": "",
             "sensor_detection_probability": 0.85,
@@ -316,7 +327,11 @@ class GsiSearchNode(Node):
             self._start_viewpoint_action(viewpoint)
             return
         self._republish_goal_if_due()
+        if self._awaiting_operator_confirmation:
+            self._log_progress("waiting_for_operator_confirmation")
+            return
         if self._can_record_positive_detection_in_transit():
+            self._operator_candidate_detections = self._target_detections()
             self._transit_detection_recorded = True
             self._record_sensor_observation(
                 "positive_detection_in_transit",
@@ -352,6 +367,24 @@ class GsiSearchNode(Node):
         ):
             self._log_progress("waiting_for_observation_quality")
             return
+        if (
+            bool(self._parameter("operator_confirmation_enabled"))
+            and bool(self._session.pending_policy_metadata.get("verification_mode"))
+        ):
+            self._awaiting_operator_confirmation = True
+            target = self._session.pending_policy_metadata.get(
+                "verification_target_position"
+            )
+            self.get_logger().warning(
+                "OPERATOR CONFIRMATION REQUIRED: UAV is hovering over "
+                f"target={target}. Inspect the onboard image, then enter y/yes "
+                "for correct or n/no for incorrect in the launch terminal."
+            )
+            self._write_trace("operator_confirmation_requested", {
+                "viewpoint": _viewpoint_dict(self._actual_viewpoint()),
+                "target_position": target,
+            })
+            return
         self._record_sensor_observation("settled_viewpoint")
 
     def _on_safety_status(self, message: String) -> None:
@@ -360,6 +393,43 @@ class GsiSearchNode(Node):
             return
         self._safety_abort_reason = f"PX4 safety stop: {reason}"
         self.get_logger().error(self._safety_abort_reason)
+
+    def _on_operator_confirmation(self, message: String) -> None:
+        if not self._awaiting_operator_confirmation:
+            self.get_logger().warning(
+                "Ignoring operator confirmation because no decision is pending"
+            )
+            return
+        answer = str(message.data).strip().lower()
+        if answer in {"y", "yes", "correct", "true", "1"}:
+            accepted = True
+        elif answer in {"n", "no", "wrong", "incorrect", "false", "0"}:
+            accepted = False
+        else:
+            self.get_logger().warning(
+                f"Unknown operator confirmation {answer!r}; use yes or no"
+            )
+            return
+        self._awaiting_operator_confirmation = False
+        detections = self._operator_candidate_detections if accepted else ()
+        self.get_logger().warning(
+            "Operator marked the candidate "
+            + ("CORRECT; completing confirmation" if accepted else "INCORRECT; resuming coverage")
+        )
+        self._write_trace("operator_confirmation", {
+            "accepted": accepted,
+            "viewpoint": _viewpoint_dict(self._actual_viewpoint()),
+        })
+        self._record_sensor_observation(
+            "operator_confirmed" if accepted else "operator_rejected",
+            detection_override=detections,
+        )
+        self._operator_candidate_detections = ()
+        if not accepted:
+            # Do not immediately prompt again on the same buffered YOLO frames.
+            # Re-arm after the detector has observed at least one clear frame.
+            self._operator_rejection_wait_for_clear = True
+            self._transit_detection_recorded = False
 
     def _initialize_session(self) -> None:
         actual = self._actual_viewpoint()
@@ -785,6 +855,7 @@ class GsiSearchNode(Node):
         trigger: str,
         *,
         transit: bool = False,
+        detection_override: Optional[Tuple[TargetDetection, ...]] = None,
     ) -> bool:
         assert self._session is not None
         assert self._adapter is not None
@@ -818,7 +889,11 @@ class GsiSearchNode(Node):
             timestamp_s=now,
             viewpoint=self._actual_viewpoint(),
             frame_id="map",
-            detections=self._target_detections(),
+            detections=(
+                self._target_detections()
+                if detection_override is None
+                else detection_override
+            ),
             visible_ground_points_xy=visible_ground_points,
             observation_quality=self._observation_quality(),
             visibility_probability=visibility_probability,
@@ -1194,6 +1269,11 @@ class GsiSearchNode(Node):
             return None
 
     def _can_record_positive_detection_in_transit(self) -> bool:
+        current_detections = self._target_detections()
+        if self._operator_rejection_wait_for_clear:
+            if current_detections:
+                return False
+            self._operator_rejection_wait_for_clear = False
         if (
             self._transit_detection_recorded
             or not bool(self._parameter("record_first_positive_detection_in_transit"))
@@ -1218,7 +1298,7 @@ class GsiSearchNode(Node):
         criteria = self._session.state.task.success_criteria
         return _can_use_transit_detection_evidence(
             self._session.state.observations,
-            self._target_detections(),
+            current_detections,
             minimum_confidence=criteria.min_confidence,
             maximum_localization_error_m=criteria.max_localization_error_m,
         )
