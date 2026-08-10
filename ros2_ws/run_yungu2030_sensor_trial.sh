@@ -20,18 +20,19 @@ if [[ -z "${VISIONFLOW_ROOT:-}" ]]; then
 fi
 CONTAINER_NAME="${GSI_SITL_CONTAINER:-visionflow-px4-sitl}"
 OUTPUT_ROOT="${GSI_YUNGU_RESULTS_ROOT:-${GSI_ROOT}/results/yungu2030_sensor_validation/$(date -u +%Y%m%dT%H%M%SZ)}"
-TARGET_X_M="${GSI_TARGET_X_M:-220}"
-TARGET_Y_M="${GSI_TARGET_Y_M:-94}"
+TARGET_X_M="${GSI_TARGET_X_M:-175}"
+TARGET_Y_M="${GSI_TARGET_Y_M:-85}"
 TARGET_Z_M="${GSI_TARGET_Z_M:-0.4}"
 TARGET_YAW_RAD="${GSI_TARGET_YAW_RAD:-0}"
-CAPTURE_DURATION_S="${GSI_CAPTURE_DURATION_S:-240}"
+CAPTURE_DURATION_S="${GSI_CAPTURE_DURATION_S:-600}"
 STARTUP_TIMEOUT_S="${GSI_STARTUP_TIMEOUT_S:-300}"
-SEARCH_TIMEOUT_S="${GSI_SEARCH_TIMEOUT_S:-180}"
+SEARCH_TIMEOUT_S="${GSI_SEARCH_TIMEOUT_S:-600}"
 SEARCH_TIME_BUDGET_S="${GSI_SEARCH_TIME_BUDGET_S:-$(python3 -c 'import sys; print(max(1.0, float(sys.argv[1]) - 5.0))' "${SEARCH_TIMEOUT_S}")}"
 GUI_CONFIG="${GSI_YUNGU_GUI_CONFIG:-}"
 PRE_SEARCH_DELAY_S="${GSI_PRE_SEARCH_DELAY_S:-0}"
 YOLO_MODEL_PATH="${GSI_YOLO_MODEL_PATH:-${GSI_ROOT}/artifacts/models/yolo11n.pt}"
 INSTALL_YOLO_DEPS="${GSI_INSTALL_YOLO_DEPS:-1}"
+SHOW_CAMERA="${GSI_SHOW_CAMERA:-0}"
 
 if [[ ! -s "${YOLO_MODEL_PATH}" ]]; then
     echo "YOLO model is missing: ${YOLO_MODEL_PATH}" >&2
@@ -46,6 +47,10 @@ fi
 mkdir -p "${OUTPUT_ROOT}"
 
 cleanup() {
+    if [[ -n "${CAMERA_VIEW_PID:-}" ]]; then
+        kill -- "-${CAMERA_VIEW_PID}" >/dev/null 2>&1 || true
+        wait "${CAMERA_VIEW_PID}" >/dev/null 2>&1 || true
+    fi
     if [[ -n "${CAPTURE_PID:-}" ]]; then
         kill "${CAPTURE_PID}" >/dev/null 2>&1 || true
         wait "${CAPTURE_PID}" >/dev/null 2>&1 || true
@@ -144,6 +149,10 @@ setsid timeout --foreground "${SEARCH_TIMEOUT_S}" \
         "cd /tmp/GSI/ros2_ws && GSI_SEARCH_TIME_BUDGET_S='${SEARCH_TIME_BUDGET_S}' GSI_RUNTIME_LOG=/tmp/GSI/results/yungu2030_sensor_validation/runtime.log bash run_yungu2030_search.sh" \
     > "${OUTPUT_ROOT}/search_console.log" 2>&1 &
 SEARCH_PID=$!
+if [[ "${SHOW_CAMERA}" == "1" ]]; then
+    setsid bash "${ROS2_WS}/view_yungu2030_camera.sh" "${CONTAINER_NAME}" &
+    CAMERA_VIEW_PID=$!
+fi
 SEARCH_STATUS=""
 while kill -0 "${SEARCH_PID}" >/dev/null 2>&1; do
     if docker exec "${CONTAINER_NAME}" bash -lc \

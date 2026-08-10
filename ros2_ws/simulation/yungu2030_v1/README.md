@@ -46,9 +46,10 @@ YOLO are runnable with that camera. A true 45-degree search view followed by
 a 90-degree confirmation view requires a controllable gimbal or a second
 camera and is deliberately not claimed by this version.
 
-The default search rectangle is the offline-validated east half of Yungu:
-`x=[159.9472965, 324.729980]`, `y=[-10.610370, 210.563126]`. Navigation may
-use the full map bounds so the UAV can enter from its spawn at `(42, 90)`.
+The default search rectangle is the central open courtyard enclosed by campus
+buildings: `x=[140, 210]`, `y=[65, 105]`. Navigation may use the full map
+bounds so the UAV can enter from its spawn at `(42, 90)`. The default SUV pose
+is the collision-free courtyard point `(175, 85, 0.4)`.
 Re-run the geometry, route, ideal-visibility, and recovery audit without
 starting Gazebo:
 
@@ -56,11 +57,16 @@ starting Gazebo:
 PYTHONPATH=. python3 run/validate_yungu_coverage_offline.py
 ```
 
-The validated route contains 309 primary viewpoints and 54 ideal-visibility
-recovery viewpoints. All 231 searchable cells become covered; 160 restricted
-cells are excluded and no deferred cell remains. The collision-free route is
-approximately 5.91 km including recovery and contains 80 obstacle-detour
-waypoints.
+The central route contains 42 primary viewpoints and at most 28
+ideal-visibility recovery viewpoints. All 28 cells become covered with no
+restricted or deferred cell. The route is about 405 m before optional recovery
+and 644 m with every recovery viewpoint included.
+
+For a watched 600-second run with Gazebo and the live UAV RGB window:
+
+```bash
+bash ros2_ws/start_yungu_central_visual_demo.sh
+```
 
 This scenario joins the local Yungu CAD world to the existing PX4 X500 search
 stack. It is a simulator validation using rendered Gazebo RGB-D data, not a

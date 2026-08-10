@@ -35,7 +35,7 @@ class ManifestAndStatisticsTests(unittest.TestCase):
 
         self.assertIn("horizontal_setpoint_speed_mps: 0.0", parameters)
         self.assertIn("horizontal_setpoint_max_lead_m: 0.0", parameters)
-        self.assertIn("param set-default MPC_XY_VEL_MAX 1.0", airframe)
+        self.assertIn("param set-default MPC_XY_VEL_MAX 1.5", airframe)
         self.assertIn("param set-default MPC_ACC_HOR 2.0", airframe)
         self.assertIn("param set-default MPC_ACC_HOR_MAX 2.0", airframe)
         self.assertIn("param set-default MPC_TILTMAX_AIR 20.0", airframe)
