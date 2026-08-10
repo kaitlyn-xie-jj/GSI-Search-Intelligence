@@ -72,10 +72,10 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 {
-    ros2 topic info /oakd1/rgb/image
-    ros2 topic info /oakd1/depth/image
-    ros2 topic info /oakd1/depth/points
-    ros2 topic info /mavros/local_position/odom
+    ros2 topic info /oakd1/rgb/image || true
+    ros2 topic info /oakd1/depth/image || true
+    ros2 topic info /oakd1/depth/points || true
+    ros2 topic info /mavros/local_position/odom || true
 } > "${OUTPUT_DIR}/topic_info.txt" 2>&1
 timeout 20 ros2 topic hz /oakd1/rgb/image > "${OUTPUT_DIR}/rgb_rate.txt" 2>&1 || true
 timeout 20 ros2 topic hz /oakd1/depth/image > "${OUTPUT_DIR}/depth_rate.txt" 2>&1 || true

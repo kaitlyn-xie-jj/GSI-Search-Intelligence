@@ -46,10 +46,11 @@ YOLO are runnable with that camera. A true 45-degree search view followed by
 a 90-degree confirmation view requires a controllable gimbal or a second
 camera and is deliberately not claimed by this version.
 
-The default search rectangle is the central open courtyard enclosed by campus
-buildings: `x=[140, 210]`, `y=[70, 100]`. Navigation may use the full map
-bounds so the UAV can enter from its spawn at `(42, 90)`. The default SUV pose
-is the collision-free courtyard point `(175, 85, 0.4)`.
+The default search rectangle is the flat south road connector beside the
+central campus buildings: `x=[160, 209]`, `y=[62, 72]`. Its semantic elevation
+is 0.27-0.30 m, so it deliberately excludes the adjacent sunken plaza. The
+default SUV pose `(180, 65, 0.28)` places the bottom of its collision box on
+that road surface.
 Re-run the geometry, route, ideal-visibility, and recovery audit without
 starting Gazebo:
 
@@ -57,10 +58,9 @@ starting Gazebo:
 PYTHONPATH=. python3 run/validate_yungu_coverage_offline.py
 ```
 
-The central route contains 42 primary viewpoints and at most 28
-ideal-visibility recovery viewpoints. All 28 cells become covered with no
-restricted or deferred cell. The route is about 405 m before optional recovery
-and 644 m with every recovery viewpoint included.
+The 7 m route spacing is smaller than both planned camera footprint dimensions
+(about 10.97 m by 8.23 m at 10 m altitude), leaving overlap between adjacent
+viewpoints and adjacent passes rather than an uncovered seam.
 
 For a watched 600-second run with Gazebo and the live UAV RGB window:
 

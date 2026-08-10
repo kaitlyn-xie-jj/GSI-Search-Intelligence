@@ -29,6 +29,18 @@ SEMANTIC_MAP_PATH = ROS2_WS.parent / "data" / "yungu2030_v1" / "semantic_map.jso
 
 
 class ManifestAndStatisticsTests(unittest.TestCase):
+    def test_visual_demo_uses_flat_road_and_overlapping_coverage(self):
+        parameters = SEARCH_PARAMS_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("area_min_x_m: 160.0", parameters)
+        self.assertIn("area_min_y_m: 62.0", parameters)
+        self.assertIn("area_max_x_m: 209.0", parameters)
+        self.assertIn("area_max_y_m: 72.0", parameters)
+        self.assertIn("grid_resolution_m: 7.0", parameters)
+        self.assertIn("coverage_pass_spacing_m: 7.0", parameters)
+        self.assertIn("coverage_observation_spacing_m: 7.0", parameters)
+        self.assertIn("ground_plane_z_m: 0.28", parameters)
+
     def test_yungu_uses_px4_trajectory_control_baseline(self):
         parameters = SEARCH_PARAMS_PATH.read_text(encoding="utf-8")
         airframe = AIRFRAME_PATH.read_text(encoding="utf-8")
