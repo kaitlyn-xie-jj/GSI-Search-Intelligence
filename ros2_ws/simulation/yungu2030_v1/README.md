@@ -29,6 +29,10 @@ requires a version below 80, while the current Torch runtime requires at least
 77.0.3. It finishes with `pip check` so dependency conflicts fail before a
 simulation run.
 
+It also pins `numpy<2` and `opencv-python<4.12`, because the ROS 2 Humble
+`cv_bridge` binary uses the NumPy 1.x ABI. Newer NumPy/OpenCV combinations fail
+while importing `cv_bridge` with `_ARRAY_API` or `multiarray` errors.
+
 Copy the resulting `artifacts/models/yolo11n.pt` into
 `/tmp/GSI/models/yolo11n.pt` in the runtime container. Ultralytics is
 AGPL-3.0; deployment and redistribution must be reviewed accordingly.

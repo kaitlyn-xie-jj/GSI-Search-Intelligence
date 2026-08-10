@@ -2,4 +2,8 @@
 # ROS 2 Humble / colcon-core 0.21 requires setuptools below 80.
 setuptools>=77.0.3,<80
 cffi>=1.4.1
+# ROS 2 Humble's cv_bridge binary is built against the NumPy 1.x ABI.
+numpy>=1.23,<2
+# OpenCV 5 requires NumPy 2 on Python 3.10, so keep the last 4.x ABI line.
+opencv-python>=4.6,<4.12
 ultralytics>=8.3,<9
