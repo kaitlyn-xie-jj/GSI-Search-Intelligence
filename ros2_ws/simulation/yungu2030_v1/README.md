@@ -68,6 +68,11 @@ For a watched 600-second run with Gazebo and the live UAV RGB window:
 bash ros2_ws/start_yungu_central_visual_demo.sh
 ```
 
+The first visual run installs the pinned YOLO stack and commits it into the
+local `visionflow-px4:humble-gz` image. Later runs validate that cached stack
+and skip pip entirely. Set `GSI_CACHE_YOLO_IMAGE=0` only when an ephemeral
+container is explicitly desired.
+
 This scenario joins the local Yungu CAD world to the existing PX4 X500 search
 stack. It is a simulator validation using rendered Gazebo RGB-D data, not a
 claim about physical camera hardware.

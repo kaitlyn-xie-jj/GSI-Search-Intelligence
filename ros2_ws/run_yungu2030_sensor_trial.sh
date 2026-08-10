@@ -33,6 +33,8 @@ PRE_SEARCH_DELAY_S="${GSI_PRE_SEARCH_DELAY_S:-0}"
 YOLO_MODEL_PATH="${GSI_YOLO_MODEL_PATH:-${GSI_ROOT}/artifacts/models/yolo11n.pt}"
 INSTALL_YOLO_DEPS="${GSI_INSTALL_YOLO_DEPS:-1}"
 SHOW_CAMERA="${GSI_SHOW_CAMERA:-0}"
+CACHE_YOLO_IMAGE="${GSI_CACHE_YOLO_IMAGE:-1}"
+SITL_IMAGE="${GSI_SITL_IMAGE:-visionflow-px4:humble-gz}"
 
 if [[ ! -s "${YOLO_MODEL_PATH}" ]]; then
     echo "YOLO model is missing: ${YOLO_MODEL_PATH}" >&2
@@ -117,22 +119,32 @@ docker cp "${GSI_ROOT}/modules" "${CONTAINER_NAME}:/tmp/GSI/modules"
 docker cp "${ROS2_WS}" "${CONTAINER_NAME}:/tmp/GSI/ros2_ws"
 docker exec "${CONTAINER_NAME}" mkdir -p /tmp/GSI/models
 docker cp "${YOLO_MODEL_PATH}" "${CONTAINER_NAME}:/tmp/GSI/models/yolo11n.pt"
-if [[ "${INSTALL_YOLO_DEPS}" == "1" ]]; then
-    # Always reconcile the complete pinned stack. Checking only that
-    # Ultralytics imports can miss incompatible transitive build tools.
+echo "[GSI 1/4] Checking the cached ROS/YOLO Python environment..."
+VISION_STACK_CHECK='from importlib.metadata import version; from packaging.version import Version; import cv2, numpy, setuptools, ultralytics; from cv_bridge import CvBridge; assert Version("77.0.3") <= Version(version("setuptools")) < Version("80"); assert Version(version("packaging")) >= Version("22"); assert Version("1.23") <= Version(numpy.__version__) < Version("2"); assert Version("4.6") <= Version(cv2.__version__) < Version("4.12")'
+if docker exec "${CONTAINER_NAME}" bash -lc \
+    "source /opt/ros/humble/setup.bash; python3 -c '${VISION_STACK_CHECK}'" \
+    >/dev/null 2>&1; then
+    echo "[GSI 1/4] Cached ROS/YOLO dependencies are ready; skipping pip install."
+elif [[ "${INSTALL_YOLO_DEPS}" == "1" ]]; then
+    echo "[GSI 1/4] One-time ROS/YOLO dependency installation is required."
     docker exec "${CONTAINER_NAME}" python3 -m pip install \
         -r /tmp/GSI/ros2_ws/src/gsi_search_bridge/requirements-vision.txt
-else
-    if ! docker exec "${CONTAINER_NAME}" python3 -c \
-        'import cv2, numpy, packaging, setuptools, ultralytics' >/dev/null 2>&1; then
-        echo "Ultralytics is not installed in ${CONTAINER_NAME}." >&2
-        echo "Set GSI_INSTALL_YOLO_DEPS=1 or bake requirements-vision.txt into the image." >&2
-        exit 1
+    docker exec "${CONTAINER_NAME}" bash -lc \
+        "source /opt/ros/humble/setup.bash; python3 -c '${VISION_STACK_CHECK}'"
+    if [[ "${CACHE_YOLO_IMAGE}" == "1" ]]; then
+        echo "[GSI 1/4] Saving dependencies into local image ${SITL_IMAGE}; future runs will skip downloads."
+        docker commit "${CONTAINER_NAME}" "${SITL_IMAGE}" >/dev/null
     fi
+else
+    echo "The container ROS/YOLO environment is missing or incompatible." >&2
+    echo "Set GSI_INSTALL_YOLO_DEPS=1 to install and cache it." >&2
+    exit 1
 fi
+echo "[GSI 2/4] Spawning the vehicle target at (${TARGET_X_M}, ${TARGET_Y_M}, ${TARGET_Z_M})..."
 docker exec "${CONTAINER_NAME}" bash -lc \
     "cd /tmp/GSI/ros2_ws && bash spawn_visionflow_target.sh yungu2030_local_origin '${TARGET_X_M}' '${TARGET_Y_M}' '${TARGET_Z_M}' '${TARGET_YAW_RAD}' yellow_search_van"
 
+echo "[GSI 3/4] Starting sensor capture..."
 docker exec "${CONTAINER_NAME}" bash -lc \
     "cd /tmp/GSI/ros2_ws && GSI_CAPTURE_DURATION_S='${CAPTURE_DURATION_S}' GSI_ALLOW_RAW_RGB_FALLBACK=1 bash record_yungu2030_sensor_data.sh /tmp/GSI/results/yungu2030_sensor_validation/capture" \
     > "${OUTPUT_ROOT}/capture_console.log" 2>&1 &
@@ -144,12 +156,14 @@ if (( PRE_SEARCH_DELAY_S > 0 )); then
 fi
 
 set +e
+echo "[GSI 4/4] Starting coverage planning, flight control, YOLO, and live logs..."
 setsid timeout --foreground "${SEARCH_TIMEOUT_S}" \
     docker exec "${CONTAINER_NAME}" bash -lc \
         "cd /tmp/GSI/ros2_ws && GSI_SEARCH_TIME_BUDGET_S='${SEARCH_TIME_BUDGET_S}' GSI_RUNTIME_LOG=/tmp/GSI/results/yungu2030_sensor_validation/runtime.log bash run_yungu2030_search.sh" \
     > >(tee "${OUTPUT_ROOT}/search_console.log") 2>&1 &
 SEARCH_PID=$!
 if [[ "${SHOW_CAMERA}" == "1" ]]; then
+    echo "Opening live onboard camera /oakd1/rgb/image..."
     setsid bash "${ROS2_WS}/view_yungu2030_camera.sh" "${CONTAINER_NAME}" &
     CAMERA_VIEW_PID=$!
 fi
