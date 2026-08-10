@@ -3,7 +3,21 @@ set -euo pipefail
 
 ROS2_WS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GSI_ROOT="$(cd "${ROS2_WS}/.." && pwd)"
-VISIONFLOW_ROOT="${VISIONFLOW_ROOT:-/home/windylab/workspace/VisionFlow-PX4}"
+if [[ -z "${VISIONFLOW_ROOT:-}" ]]; then
+    for candidate in \
+        "${GSI_ROOT}/../../projects/VisionFlow-PX4" \
+        "${GSI_ROOT}/../VisionFlow-PX4" \
+        /home/windylab/workspace/VisionFlow-PX4; do
+        if [[ -f "${candidate}/docker/gz_sitl_profiles.conf" ]]; then
+            VISIONFLOW_ROOT="$(cd "${candidate}" && pwd)"
+            break
+        fi
+    done
+fi
+if [[ -z "${VISIONFLOW_ROOT:-}" ]]; then
+    echo "VisionFlow-PX4 was not found. Set VISIONFLOW_ROOT to its checkout path." >&2
+    exit 1
+fi
 CONTAINER_NAME="${GSI_SITL_CONTAINER:-visionflow-px4-sitl}"
 OUTPUT_ROOT="${GSI_YUNGU_RESULTS_ROOT:-${GSI_ROOT}/results/yungu2030_sensor_validation/$(date -u +%Y%m%dT%H%M%SZ)}"
 TARGET_X_M="${GSI_TARGET_X_M:-220}"
