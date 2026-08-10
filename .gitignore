@@ -308,6 +308,9 @@ models/
 !ros2_ws/simulation/models/
 !ros2_ws/simulation/models/yellow_search_van/
 !ros2_ws/simulation/models/yellow_search_van/**
+!ros2_ws/simulation/yungu2030_v1/models/
+!ros2_ws/simulation/yungu2030_v1/models/x500_gsi_rgbd_nadir_longrange/
+!ros2_ws/simulation/yungu2030_v1/models/x500_gsi_rgbd_nadir_longrange/**
 !llm_finetune/verl_scripts/verl/verl/models/
 !llm_finetune/verl_scripts/verl/verl/models/**
 *.pth

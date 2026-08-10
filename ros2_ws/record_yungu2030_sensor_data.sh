@@ -6,8 +6,8 @@ set -eo pipefail
 ROS2_WS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUTPUT_DIR="${1:-/tmp/GSI/results/yungu2030_sensor_validation/capture_$(date -u +%Y%m%dT%H%M%SZ)}"
 DURATION_S="${GSI_CAPTURE_DURATION_S:-180}"
-WIDTH="${GSI_RGB_WIDTH:-160}"
-HEIGHT="${GSI_RGB_HEIGHT:-120}"
+WIDTH="${GSI_RGB_WIDTH:-640}"
+HEIGHT="${GSI_RGB_HEIGHT:-480}"
 FPS="${GSI_RGB_FPS:-10}"
 ALLOW_RAW_RGB_FALLBACK="${GSI_ALLOW_RAW_RGB_FALLBACK:-0}"
 

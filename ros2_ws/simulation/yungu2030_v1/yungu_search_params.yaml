@@ -7,10 +7,10 @@ gsi_search_node:
     # Flat north road connector beside the central buildings. Its semantic
     # elevation is 0.27-0.30 m; unlike the adjacent sunken plaza, a single
     # ground plane is valid across this entire demonstration rectangle.
-    area_min_x_m: 90.0
-    area_min_y_m: 57.0
-    area_max_x_m: 140.0
-    area_max_y_m: 72.0
+    area_min_x_m: 50.0
+    area_min_y_m: 100.0
+    area_max_x_m: 250.0
+    area_max_y_m: 200.0
     # Search bounds and navigation bounds are deliberately separate: the UAV
     # starts at (42, 90), outside the courtyard search rectangle, and must fly
     # through the full known-safe map to reach its closest sweep endpoint.
@@ -25,8 +25,8 @@ gsi_search_node:
     # intrinsics. A positive value remains available as a legacy circle override.
     sensor_footprint_radius_m: 0.0
     camera_horizontal_fov_rad: 1.0472
-    camera_image_width_px: 160
-    camera_image_height_px: 120
+    camera_image_width_px: 640
+    camera_image_height_px: 480
     planning_footprint_scale: 0.95
     # Full-map audit: 622 primary poses plus at most 1908 safe recovery
     # candidates when every observation is inconclusive.
@@ -63,12 +63,11 @@ gsi_search_node:
     # 16.45 x 12.34 m, so 7 m keeps generous overlap in both directions.
     coverage_pass_spacing_m: 7.0
     coverage_observation_spacing_m: 7.0
-    # The current airframe has a fixed nadir camera. A later gimbal/dual-camera
-    # change is required before this can truthfully become -0.785398 (45 deg).
-    coverage_camera_pitch_rad: -1.570796
+    # Search follows the 45-degree camera and keeps yaw aligned with travel.
+    coverage_camera_pitch_rad: -0.785398
     coverage_start_from_nearest_endpoint: true
-    # After the primary route, revisit cells that never received a sufficiently
-    # clear observation. Alternate viewpoints approach each gap from four sides.
+    # After the primary route, make one local lawn-mower sweep over genuinely
+    # unseen/occluded cells instead of orbiting each cell from many headings.
     coverage_recovery_enabled: true
     coverage_recovery_min_quality: 0.5
     coverage_recovery_offset_m: 4.0
@@ -85,10 +84,9 @@ gsi_search_node:
     maximum_sensor_skew_s: 3.0
     minimum_observation_quality: 0.5
     minimum_negative_observation_quality: 0.5
-    # The 160x120 nadir sensor produced roughly 300-430 valid road-plane
-    # samples per settled view in the latest SITL run. Require 200 so a valid
-    # flat-road observation is accepted while sparse edge projections are not.
-    minimum_projected_ground_points: 200
+    # 80 points is enough to establish road visibility without turning normal
+    # perspective sparsity into an endless recovery trigger.
+    minimum_projected_ground_points: 80
     # Keep the 15 m inspection altitude, but route horizontally around every
     # building whose roof is not safely below the commanded flight segment.
     building_route_planning_enabled: true
@@ -123,7 +121,7 @@ gsi_search_node:
     camera_translation_y_m: 0.0
     camera_translation_z_m: -0.05
     camera_roll_rad: 0.0
-    camera_pitch_rad: 1.570796
+    camera_pitch_rad: 0.785398
     camera_yaw_rad: 0.0
     ground_plane_z_m: 0.28
     ground_tolerance_m: 0.35
@@ -219,7 +217,7 @@ gsi_color_target_detector:
     camera_translation_y_m: 0.0
     camera_translation_z_m: -0.05
     camera_roll_rad: 0.0
-    camera_pitch_rad: 1.570796
+    camera_pitch_rad: 0.785398
     camera_yaw_rad: 0.0
 
 gsi_yolo_target_detector:
@@ -255,5 +253,5 @@ gsi_yolo_target_detector:
     camera_translation_y_m: 0.0
     camera_translation_z_m: -0.05
     camera_roll_rad: 0.0
-    camera_pitch_rad: 1.570796
+    camera_pitch_rad: 0.785398
     camera_yaw_rad: 0.0

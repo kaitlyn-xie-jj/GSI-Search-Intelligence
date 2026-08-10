@@ -16,6 +16,9 @@ SPEC.loader.exec_module(validation)
 
 MANIFEST_PATH = ROS2_WS / "simulation" / "yungu2030_v1" / "validation_manifest.json"
 SEARCH_PARAMS_PATH = ROS2_WS / "simulation" / "yungu2030_v1" / "yungu_search_params.yaml"
+MODEL_PATH = ROS2_WS / "simulation" / "yungu2030_v1" / "models" / "x500_gsi_rgbd_nadir_longrange" / "model.sdf"
+BRIDGE_PATH = ROS2_WS / "simulation" / "yungu2030_v1" / "gz_bridge.yaml"
+GUI_PATH = ROS2_WS / "simulation" / "yungu2030_v1" / "gui_drone_follow.config"
 AIRFRAME_PATH = (
     ROS2_WS
     / "simulation"
@@ -43,10 +46,26 @@ class ManifestAndStatisticsTests(unittest.TestCase):
         self.assertIn("ground_plane_z_m: 0.28", parameters)
         self.assertIn("verification_max_horizontal_offset_m: 0.01", parameters)
         self.assertIn("operator_confirmation_enabled: true", parameters)
+        self.assertIn("coverage_camera_pitch_rad: -0.785398", parameters)
+        self.assertIn("minimum_projected_ground_points: 80", parameters)
         self.assertIn(
             "operator_confirmation_topic: /gsi/operator_confirmation",
             parameters,
         )
+
+    def test_yungu_airframe_has_oblique_search_and_nadir_confirmation_cameras(self):
+        model = MODEL_PATH.read_text(encoding="utf-8")
+        bridge = BRIDGE_PATH.read_text(encoding="utf-8")
+        gui = GUI_PATH.read_text(encoding="utf-8")
+
+        self.assertIn('name="gsi_rgbd_link"', model)
+        self.assertIn("0.12 0 -0.05 0 0.785398 0", model)
+        self.assertIn('name="gsi_nadir_link"', model)
+        self.assertIn("0 0 -0.06 0 1.570796 0", model)
+        self.assertIn("/gsi/verification/image", bridge)
+        self.assertIn("gz_topic_name: /gsi/nadir", bridge)
+        self.assertIn('name="Nadir Confirmation Camera"', gui)
+        self.assertIn("<topic>/gsi/nadir</topic>", gui)
 
     def test_yungu_uses_px4_trajectory_control_baseline(self):
         parameters = SEARCH_PARAMS_PATH.read_text(encoding="utf-8")

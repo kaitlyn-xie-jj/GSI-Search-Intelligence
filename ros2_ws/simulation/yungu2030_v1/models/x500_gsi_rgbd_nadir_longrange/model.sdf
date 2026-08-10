@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sdf version="1.9">
+  <model name="x500_gsi_rgbd_nadir_longrange">
+    <include merge="true"><uri>model://x500</uri></include>
+    <!-- Oblique RGB-D camera used for search and metric localization. -->
+    <link name="gsi_rgbd_link">
+      <pose relative_to="base_link">0.12 0 -0.05 0 0.785398 0</pose>
+      <inertial>
+        <mass>0.0616</mass>
+        <inertia><ixx>0.00009108</ixx><iyy>0.00000251</iyy><izz>0.00008931</izz></inertia>
+      </inertial>
+      <collision name="collision"><geometry><box><size>0.09 0.025 0.025</size></box></geometry></collision>
+      <visual name="visual">
+        <geometry><box><size>0.09 0.025 0.025</size></box></geometry>
+        <material><ambient>0.08 0.08 0.08 1</ambient><diffuse>0.12 0.12 0.12 1</diffuse></material>
+      </visual>
+      <sensor name="gsi_rgbd" type="rgbd_camera">
+        <gz_frame_id>gsi_rgbd_link</gz_frame_id>
+        <topic>/gsi/rgbd</topic>
+        <always_on>true</always_on>
+        <update_rate>10</update_rate>
+        <visualize>false</visualize>
+        <camera name="camera">
+          <horizontal_fov>1.0472</horizontal_fov>
+          <image><width>640</width><height>480</height><format>R8G8B8</format></image>
+          <clip><near>0.1</near><far>90</far></clip>
+          <depth_camera><clip><near>0.2</near><far>90</far></clip></depth_camera>
+          <noise><type>gaussian</type><mean>0</mean><stddev>0.007</stddev></noise>
+        </camera>
+      </sensor>
+    </link>
+    <joint name="gsi_rgbd_mount" type="fixed"><parent>base_link</parent><child>gsi_rgbd_link</child></joint>
+    <!-- Independent nadir camera used only after localization for operator confirmation. -->
+    <link name="gsi_nadir_link">
+      <pose relative_to="base_link">0 0 -0.06 0 1.570796 0</pose>
+      <inertial>
+        <mass>0.02</mass>
+        <inertia><ixx>0.00001</ixx><iyy>0.00001</iyy><izz>0.00001</izz></inertia>
+      </inertial>
+      <sensor name="gsi_nadir" type="camera">
+        <gz_frame_id>gsi_nadir_link</gz_frame_id>
+        <topic>/gsi/nadir</topic>
+        <always_on>true</always_on>
+        <update_rate>10</update_rate>
+        <visualize>false</visualize>
+        <camera name="camera">
+          <horizontal_fov>1.0472</horizontal_fov>
+          <image><width>640</width><height>480</height><format>R8G8B8</format></image>
+          <clip><near>0.1</near><far>90</far></clip>
+        </camera>
+      </sensor>
+    </link>
+    <joint name="gsi_nadir_mount" type="fixed"><parent>base_link</parent><child>gsi_nadir_link</child></joint>
+  </model>
+</sdf>

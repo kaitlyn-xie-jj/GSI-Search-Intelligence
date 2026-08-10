@@ -33,6 +33,7 @@ PRE_SEARCH_DELAY_S="${GSI_PRE_SEARCH_DELAY_S:-0}"
 YOLO_MODEL_PATH="${GSI_YOLO_MODEL_PATH:-${GSI_ROOT}/artifacts/models/yolo11n.pt}"
 INSTALL_YOLO_DEPS="${GSI_INSTALL_YOLO_DEPS:-1}"
 SHOW_CAMERA="${GSI_SHOW_CAMERA:-0}"
+OPERATOR_UI="${GSI_OPERATOR_UI:-0}"
 CACHE_YOLO_IMAGE="${GSI_CACHE_YOLO_IMAGE:-1}"
 SITL_IMAGE="${GSI_SITL_IMAGE:-visionflow-px4:humble-gz}"
 
@@ -52,6 +53,14 @@ cleanup() {
     if [[ -n "${CAMERA_VIEW_PID:-}" ]]; then
         kill -- "-${CAMERA_VIEW_PID}" >/dev/null 2>&1 || true
         wait "${CAMERA_VIEW_PID}" >/dev/null 2>&1 || true
+    fi
+    if [[ -n "${CONFIRM_CAMERA_VIEW_PID:-}" ]]; then
+        kill -- "-${CONFIRM_CAMERA_VIEW_PID}" >/dev/null 2>&1 || true
+        wait "${CONFIRM_CAMERA_VIEW_PID}" >/dev/null 2>&1 || true
+    fi
+    if [[ -n "${OPERATOR_UI_PID:-}" ]]; then
+        kill "${OPERATOR_UI_PID}" >/dev/null 2>&1 || true
+        wait "${OPERATOR_UI_PID}" >/dev/null 2>&1 || true
     fi
     if [[ -n "${CAPTURE_PID:-}" ]]; then
         kill "${CAPTURE_PID}" >/dev/null 2>&1 || true
@@ -162,19 +171,35 @@ setsid timeout --foreground "${SEARCH_TIMEOUT_S}" \
         "cd /tmp/GSI/ros2_ws && GSI_SEARCH_TIME_BUDGET_S='${SEARCH_TIME_BUDGET_S}' GSI_RUNTIME_LOG=/tmp/GSI/results/yungu2030_sensor_validation/runtime.log bash run_yungu2030_search.sh" \
     > >(tee "${OUTPUT_ROOT}/search_console.log") 2>&1 &
 SEARCH_PID=$!
+if [[ "${OPERATOR_UI}" == "1" ]]; then
+    if command -v gnome-terminal >/dev/null 2>&1; then
+        gnome-terminal --wait --title="Yungu 目标人工确认" -- \
+            bash "${ROS2_WS}/yungu_operator_confirmation_ui.sh" \
+            "${CONTAINER_NAME}" "${OUTPUT_ROOT}/search_console.log" &
+        OPERATOR_UI_PID=$!
+    else
+        echo "gnome-terminal unavailable; using this terminal for confirmation."
+        OPERATOR_UI=0
+    fi
+fi
 if [[ "${SHOW_CAMERA}" == "1" ]]; then
-    echo "Opening live onboard camera /oakd1/rgb/image..."
+    echo "Opening 45-degree search camera /oakd1/rgb/image..."
     setsid bash "${ROS2_WS}/view_yungu2030_camera.sh" "${CONTAINER_NAME}" &
     CAMERA_VIEW_PID=$!
+    echo "Opening nadir confirmation camera /gsi/verification/image..."
+    GSI_CAMERA_TOPIC=/gsi/verification/image setsid \
+        bash "${ROS2_WS}/view_yungu2030_camera.sh" "${CONTAINER_NAME}" &
+    CONFIRM_CAMERA_VIEW_PID=$!
 fi
 SEARCH_STATUS=""
 OPERATOR_REQUEST_HANDLED=0
 while kill -0 "${SEARCH_PID}" >/dev/null 2>&1; do
     OPERATOR_REQUEST_COUNT="$(grep -c 'OPERATOR CONFIRMATION REQUIRED' "${OUTPUT_ROOT}/search_console.log" 2>/dev/null || true)"
-    if (( OPERATOR_REQUEST_COUNT > OPERATOR_REQUEST_HANDLED )); then
+    if [[ "${OPERATOR_UI}" != "1" ]] && \
+       (( OPERATOR_REQUEST_COUNT > OPERATOR_REQUEST_HANDLED )); then
         echo
         echo "Vehicle candidate detected. UAV is hovering above it."
-        echo "Inspect the onboard RGB view in Gazebo."
+        echo "Inspect the nadir confirmation view: /gsi/verification/image."
         while true; do
             read -r -p "Is this the target vehicle? [y=yes / n=no]: " OPERATOR_ANSWER
             case "${OPERATOR_ANSWER,,}" in

@@ -131,7 +131,10 @@ class CoveragePolicy(SearchPolicy):
                 x=x,
                 y=y,
                 z=self._resolve_altitude(state, dict(state.task.search_area.geometry)),
-                yaw=math.atan2(float(target[1]) - y, float(target[0]) - x),
+                # At an overhead verification pose, yaw adds no information.
+                # Preserve the current heading so centimetre-scale localization
+                # noise cannot command a pointless 180-degree turn.
+                yaw=current.yaw,
                 pitch=self.camera_pitch_rad,
             )
             if self.viewpoint_filter is None or self.viewpoint_filter(viewpoint):
@@ -237,36 +240,33 @@ class CoveragePolicy(SearchPolicy):
     ) -> Tuple[Viewpoint, ...]:
         assert self.search_grid is not None
         altitude = self._resolve_altitude(state, dict(state.task.search_area.geometry))
-        offset = self.recovery_offset_m or self.pass_spacing_m / 2.0
         uncovered = tuple(
             cell for cell in self.search_grid.searchable_cells
             if state.observed_cell_quality.get(cell.cell_id, 0.0)
             < self.recovery_min_quality
         )
-        # Stable lawn-mower order keeps recovery auditable while the alternate
-        # offsets let an occluded cell be revisited from several sides.
-        ordered = sorted(
-            uncovered,
-            key=lambda cell: (
-                cell.row,
-                cell.column if cell.row % 2 == 0 else -cell.column,
-            ),
+        if not uncovered:
+            return ()
+        # Replan a compact, deterministic mini lawn-mower route around the
+        # missed region. Cell bounds keep it local and avoid nine poses/yaws
+        # around every low-quality cell.
+        x_min = min(cell.bounds[0] for cell in uncovered)
+        y_min = min(cell.bounds[1] for cell in uncovered)
+        x_max = max(cell.bounds[2] for cell in uncovered)
+        y_max = max(cell.bounds[3] for cell in uncovered)
+        points = plan_search_waypoints(
+            {"kind": "rectangle", "coords": (
+                (x_min, y_min), (x_max, y_min),
+                (x_max, y_max), (x_min, y_max),
+            )},
+            pass_spacing=self.recovery_offset_m or self.pass_spacing_m,
+            zigzag=True,
+            max_points=self.max_points,
         )
-        points: List[Tuple[float, float]] = []
-        for cell in ordered:
-            x, y = cell.center
-            points.extend((
-                (x, y),
-                (x - offset, y),
-                (x + offset, y),
-                (x, y - offset),
-                (x, y + offset),
-                (x - offset, y - offset),
-                (x - offset, y + offset),
-                (x + offset, y - offset),
-                (x + offset, y + offset),
-            ))
-        candidates = self._to_viewpoints(tuple(dict.fromkeys(points)), altitude)
+        points = self._deduplicate_consecutive(points)
+        if self.observation_spacing_m is not None:
+            points = self._sample_segments(points, self.observation_spacing_m)
+        candidates = self._to_viewpoints(points, altitude)
         if self.viewpoint_filter is not None:
             candidates = tuple(item for item in candidates if self.viewpoint_filter(item))
         candidates = tuple(item for item in candidates if item.key not in visited)

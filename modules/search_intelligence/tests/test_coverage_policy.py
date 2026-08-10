@@ -197,10 +197,7 @@ class CoveragePolicyTests(unittest.TestCase):
             math.hypot(verification.x - 40.0, verification.y - 30.0),
             5.0,
         )
-        self.assertAlmostEqual(
-            verification.yaw,
-            math.atan2(30.0 - verification.y, 40.0 - verification.x),
-        )
+        self.assertAlmostEqual(verification.yaw, primary.yaw)
 
         state = state.advance(
             SearchObservation(viewpoint=verification, timestamp_s=2.0),
