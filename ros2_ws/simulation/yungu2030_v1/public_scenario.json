@@ -9,14 +9,18 @@
   "units": "meters",
   "sensor_profile": "x500_gsi_rgbd_nadir_longrange",
   "search": {
-    "flight_altitude_m": 30.0,
+    "policy": "coverage",
+    "target_query": "car",
+    "flight_altitude_m": 10.0,
     "sensor_footprint_model": "pinhole_nadir_rectangle",
     "horizontal_fov_rad": 1.0472,
     "image_width_px": 160,
     "image_height_px": 120,
     "footprint_scale": 0.95,
     "grid_resolution_m": 10.0,
-    "max_viewpoints": 60
+    "coverage_pass_spacing_m": 8.0,
+    "coverage_observation_spacing_m": 8.0,
+    "max_viewpoints": 1500
   },
   "safety": {
     "maximum_building_height_m": 55.1,

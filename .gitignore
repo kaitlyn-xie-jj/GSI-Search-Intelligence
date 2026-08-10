@@ -184,6 +184,7 @@ $RECYCLE.BIN/
 # Project specific files
 *.log
 *.txt
+!ros2_ws/src/gsi_search_bridge/requirements-vision.txt
 !requirements.txt
 !README.txt
 !README.md
@@ -304,6 +305,9 @@ wandb/
 llm_finetune/checkpoints/
 **/outputs/
 models/
+!ros2_ws/simulation/models/
+!ros2_ws/simulation/models/yellow_search_van/
+!ros2_ws/simulation/models/yellow_search_van/**
 !llm_finetune/verl_scripts/verl/verl/models/
 !llm_finetune/verl_scripts/verl/verl/models/**
 *.pth

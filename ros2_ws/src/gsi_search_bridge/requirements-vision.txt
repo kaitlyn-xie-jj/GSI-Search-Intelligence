@@ -1,0 +1,2 @@
+# Ultralytics is AGPL-3.0; review license obligations before distribution.
+ultralytics>=8.3,<9

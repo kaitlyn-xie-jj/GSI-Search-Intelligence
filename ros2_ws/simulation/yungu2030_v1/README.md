@@ -1,5 +1,36 @@
 # Yungu2030 RGB-D/PX4 Validation
 
+## Coverage + YOLO branch
+
+The `feature/yungu-coverage-yolo` configuration selects the deterministic
+`CoveragePolicy` lawn-mower route at 10 m. Scan passes are spaced 8 m apart
+and sampled every 8 m. The route is reversed when its far endpoint is closer
+to the initial UAV pose. Building footprints remain hard obstacles: unsafe
+coverage endpoints are removed and connecting flight legs use the existing
+building route planner.
+
+Vehicle detection is provided by `yolo_target_detector`. It runs an
+Ultralytics COCO model over `car`, `bus`, and `truck`, then reuses the RGB-D
+centroid localization contract to publish `vision_msgs/Detection3DArray` on
+`/gsi/detections`. Prepare the optional vision environment and weight with:
+
+```bash
+bash ros2_ws/prepare_yolo_detector.sh
+```
+
+Copy the resulting `artifacts/models/yolo11n.pt` into
+`/tmp/GSI/models/yolo11n.pt` in the runtime container. Ultralytics is
+AGPL-3.0; deployment and redistribution must be reviewed accordingly.
+
+The included target is now a textured OpenRobotics SUV (CC BY 3.0), while its
+historical Gazebo entity name remains `yellow_search_van` for compatibility.
+Target color is not part of the detector contract.
+
+The current PX4 model still has one fixed nadir RGB-D camera. Coverage and
+YOLO are runnable with that camera. A true 45-degree search view followed by
+a 90-degree confirmation view requires a controllable gimbal or a second
+camera and is deliberately not claimed by this version.
+
 This scenario joins the local Yungu CAD world to the existing PX4 X500 search
 stack. It is a simulator validation using rendered Gazebo RGB-D data, not a
 claim about physical camera hardware.
@@ -20,8 +51,8 @@ The dedicated X500 model publishes the normal ROS contract at 10 Hz:
 /oakd1/depth/points
 ```
 
-Yungu has collision boxes up to 55.1 m tall. This validation deliberately uses
-a 30 m flight altitude so the yellow van remains large enough in the nadir
+Yungu has collision boxes up to 55.1 m tall. This branch deliberately uses
+a 10 m flight altitude so the SUV remains large enough in the nadir
 image. The search node therefore treats the semantic-map building rectangles
 as hard navigation obstacles: it rejects viewpoints within a 3 m inflated
 building boundary and routes intersecting flight segments around safe corners.
@@ -29,10 +60,10 @@ Intermediate navigation waypoints do not create observations or belief
 updates. The RGB-D clipping range remains 90 m.
 
 The expected search footprint is derived from the 60 degree horizontal FOV,
-160x120 image geometry, flight altitude, and a 0.95 safety scale. At 30 m this
-is approximately `+/-16.45 m` by `+/-12.34 m`; the legacy 30 m radius is not
-used. Actual negative evidence still requires valid projected point-cloud
-support.
+160x120 image geometry, flight altitude, and a 0.95 safety scale. At 10 m the
+horizontal width is approximately 11.5 m, and the configured 8 m pass spacing
+keeps about 30 percent cross-track overlap. Actual negative evidence still
+requires valid projected point-cloud support.
 
 The offboard adapter accepts the Gazebo spawn pose only after five plausible
 stationary odometry samples. Losing OFFBOARD after arming, exceeding 5 m/s, or
@@ -53,7 +84,7 @@ cd /mnt/c/Users/96981/Documents/Codex/2026-07-27/files-mentioned-by-the-user-sea
 bash ros2_ws/run_yungu2030_sensor_trial.sh
 ```
 
-The default evaluator-only yellow van is at `(220, 94, 0.4, 0)`, on the stable
+The default evaluator-only SUV is at `(220, 94, 0.4, 0)`, on the stable
 flight corridor previously observed between `(180, 84)` and `(260, 104)`. The UAV
 starts at `(42, 90, 0.25)`. Override a
 position only through the run environment, for example:

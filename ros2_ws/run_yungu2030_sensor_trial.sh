@@ -16,6 +16,14 @@ SEARCH_TIMEOUT_S="${GSI_SEARCH_TIMEOUT_S:-180}"
 SEARCH_TIME_BUDGET_S="${GSI_SEARCH_TIME_BUDGET_S:-$(python3 -c 'import sys; print(max(1.0, float(sys.argv[1]) - 5.0))' "${SEARCH_TIMEOUT_S}")}"
 GUI_CONFIG="${GSI_YUNGU_GUI_CONFIG:-}"
 PRE_SEARCH_DELAY_S="${GSI_PRE_SEARCH_DELAY_S:-0}"
+YOLO_MODEL_PATH="${GSI_YOLO_MODEL_PATH:-${GSI_ROOT}/artifacts/models/yolo11n.pt}"
+INSTALL_YOLO_DEPS="${GSI_INSTALL_YOLO_DEPS:-1}"
+
+if [[ ! -s "${YOLO_MODEL_PATH}" ]]; then
+    echo "YOLO model is missing: ${YOLO_MODEL_PATH}" >&2
+    echo "Prepare it with: bash ros2_ws/prepare_yolo_detector.sh" >&2
+    exit 1
+fi
 
 if [[ -d "${OUTPUT_ROOT}" ]] && find "${OUTPUT_ROOT}" -mindepth 1 -print -quit | grep -q .; then
     OUTPUT_ROOT="${OUTPUT_ROOT}-$(date -u +%Y%m%dT%H%M%SZ)"
@@ -88,6 +96,17 @@ fi
 docker exec "${CONTAINER_NAME}" bash -lc 'rm -rf /tmp/GSI && mkdir -p /tmp/GSI/results/yungu2030_sensor_validation'
 docker cp "${GSI_ROOT}/modules" "${CONTAINER_NAME}:/tmp/GSI/modules"
 docker cp "${ROS2_WS}" "${CONTAINER_NAME}:/tmp/GSI/ros2_ws"
+docker exec "${CONTAINER_NAME}" mkdir -p /tmp/GSI/models
+docker cp "${YOLO_MODEL_PATH}" "${CONTAINER_NAME}:/tmp/GSI/models/yolo11n.pt"
+if ! docker exec "${CONTAINER_NAME}" python3 -c 'import ultralytics' >/dev/null 2>&1; then
+    if [[ "${INSTALL_YOLO_DEPS}" != "1" ]]; then
+        echo "Ultralytics is not installed in ${CONTAINER_NAME}." >&2
+        echo "Set GSI_INSTALL_YOLO_DEPS=1 or bake requirements-vision.txt into the image." >&2
+        exit 1
+    fi
+    docker exec "${CONTAINER_NAME}" python3 -m pip install \
+        -r /tmp/GSI/ros2_ws/src/gsi_search_bridge/requirements-vision.txt
+fi
 docker exec "${CONTAINER_NAME}" bash -lc \
     "cd /tmp/GSI/ros2_ws && bash spawn_visionflow_target.sh yungu2030_local_origin '${TARGET_X_M}' '${TARGET_Y_M}' '${TARGET_Z_M}' '${TARGET_YAW_RAD}' yellow_search_van"
 

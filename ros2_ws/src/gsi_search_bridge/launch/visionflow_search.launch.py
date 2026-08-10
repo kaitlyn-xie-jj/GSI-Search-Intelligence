@@ -19,6 +19,7 @@ def generate_launch_description():
     start_mavros = LaunchConfiguration("start_mavros")
     start_sensor_bridge = LaunchConfiguration("start_sensor_bridge")
     start_baseline_detector = LaunchConfiguration("start_baseline_detector")
+    start_yolo_detector = LaunchConfiguration("start_yolo_detector")
     fcu_url = LaunchConfiguration("fcu_url")
     bridge_config = LaunchConfiguration("sensor_bridge_config")
     search_config = LaunchConfiguration("search_config")
@@ -27,7 +28,8 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("start_mavros", default_value="true"),
         DeclareLaunchArgument("start_sensor_bridge", default_value="true"),
-        DeclareLaunchArgument("start_baseline_detector", default_value="true"),
+        DeclareLaunchArgument("start_baseline_detector", default_value="false"),
+        DeclareLaunchArgument("start_yolo_detector", default_value="true"),
         DeclareLaunchArgument(
             "sensor_bridge_config",
             default_value=default_bridge_config,
@@ -64,6 +66,14 @@ def generate_launch_description():
             parameters=[search_config],
             output="screen",
             condition=IfCondition(start_baseline_detector),
+        ),
+        Node(
+            package="gsi_search_bridge",
+            executable="yolo_target_detector",
+            name="gsi_yolo_target_detector",
+            parameters=[search_config],
+            output="screen",
+            condition=IfCondition(start_yolo_detector),
         ),
         Node(
             package="gsi_search_bridge",

@@ -25,7 +25,7 @@
   "excluded_labels": ["building"],
   "metadata": {
     "source": "llm_semantic_prior_regeneration",
-    "target_query": "yellow-van",
+    "target_query": "car",
     "ground_truth_pose_used": false,
     "rationale": "Prefer vehicle-accessible roads, access points and plazas; downweight bicycle parking and narrow passages."
   }

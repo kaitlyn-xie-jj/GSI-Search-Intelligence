@@ -62,6 +62,28 @@ class CoveragePolicyTests(unittest.TestCase):
         self.assertTrue(viewpoints)
         self.assertTrue(all(item.z == 42.0 for item in viewpoints))
 
+    def test_starts_from_nearest_route_endpoint(self):
+        current = Viewpoint(100.0, 100.0, 25.0, 0.0)
+        state = SearchState.initial(
+            self.task, belief={}, current_viewpoint=current
+        )
+
+        viewpoints = CoveragePolicy(pass_spacing_m=20.0).plan(state)
+
+        self.assertLess(
+            math.hypot(viewpoints[0].x - current.x, viewpoints[0].y - current.y),
+            math.hypot(viewpoints[-1].x - current.x, viewpoints[-1].y - current.y),
+        )
+
+    def test_filters_unsafe_viewpoints(self):
+        viewpoints = CoveragePolicy(
+            pass_spacing_m=20.0,
+            viewpoint_filter=lambda item: item.x < 50.0,
+        ).plan(self.state)
+
+        self.assertTrue(viewpoints)
+        self.assertTrue(all(item.x < 50.0 for item in viewpoints))
+
     def test_unsupported_geometry_finishes_without_action(self):
         task = SearchTask.from_skill_params({
             "task_id": "invalid-area",

@@ -1,23 +1,25 @@
 <?xml version="1.0"?>
 <sdf version="1.9">
+  <!-- Visual asset: OpenRobotics / Nate Koenig SUV, CC BY 3.0. -->
   <model name="yellow_search_van">
     <static>true</static>
     <pose>0 0 0 0 0 0</pose>
     <link name="body">
       <collision name="body_collision">
+        <pose>0 0 0.85 0 0 0</pose>
         <geometry>
-          <box><size>1.6 0.8 0.8</size></box>
+          <!-- A simple collision box is faster and more stable than mesh collision. -->
+          <box><size>4.7 1.9 1.7</size></box>
         </geometry>
       </collision>
-      <visual name="yellow_body">
+      <visual name="suv_body">
+        <pose>0 0 0 0 0 -1.57079632679</pose>
         <geometry>
-          <box><size>1.6 0.8 0.8</size></box>
+          <mesh>
+            <scale>0.06 0.06 0.06</scale>
+            <uri>models/yellow_search_van/meshes/suv.obj</uri>
+          </mesh>
         </geometry>
-        <material>
-          <ambient>1.0 0.72 0.02 1</ambient>
-          <diffuse>1.0 0.72 0.02 1</diffuse>
-          <specular>0.15 0.15 0.08 1</specular>
-        </material>
       </visual>
     </link>
   </model>

@@ -34,6 +34,7 @@ from modules.search_intelligence import (
     BayesianBeliefUpdater,
     BinarySensorModel,
     CandidateViewpointGenerator,
+    CoveragePolicy,
     SearchGrid,
     SearchObservationAdapter,
     SearchSensorFrame,
@@ -124,6 +125,7 @@ class GsiSearchNode(Node):
     def _declare_parameters(self) -> None:
         defaults = {
             "target_query": "yellow-van",
+            "search_policy": "active",
             "area_id": "gazebo-search-area",
             "area_min_x_m": -50.0,
             "area_min_y_m": -40.0,
@@ -162,6 +164,10 @@ class GsiSearchNode(Node):
             "active_candidate_frontier_fraction": 0.5,
             "active_planning_speed_mps": 1.0,
             "active_completion_time_reserve_s": 5.0,
+            "coverage_pass_spacing_m": 20.0,
+            "coverage_observation_spacing_m": 0.0,
+            "coverage_camera_pitch_rad": -1.5707963267948966,
+            "coverage_start_from_nearest_endpoint": True,
             "active_distance_scale_mode": "fixed",
             "active_distance_scale_m": 100.0,
             "position_tolerance_m": 0.75,
@@ -436,17 +442,53 @@ class GsiSearchNode(Node):
             raise ValueError(
                 "active_distance_scale_mode must be fixed or map_diagonal"
             )
+        policy_name = str(self._parameter("search_policy")).strip().lower()
         adaptive_weights_enabled = bool(
             self._parameter("active_adaptive_weights_enabled")
         )
         lookahead_enabled = bool(
             self._parameter("active_belief_lookahead_enabled")
         )
-        policy_type = ActiveSearchPolicy
-        if adaptive_weights_enabled and lookahead_enabled:
-            policy_type = AdaptiveBeliefLookaheadPolicy
-        elif adaptive_weights_enabled:
-            policy_type = AdaptiveActiveSearchPolicy
+        if policy_name == "coverage":
+            observation_spacing = float(
+                self._parameter("coverage_observation_spacing_m")
+            )
+            policy = CoveragePolicy(
+                pass_spacing_m=float(
+                    self._parameter("coverage_pass_spacing_m")
+                ),
+                altitude_m=float(self._parameter("flight_altitude_m")),
+                camera_pitch_rad=float(
+                    self._parameter("coverage_camera_pitch_rad")
+                ),
+                observation_spacing_m=(
+                    observation_spacing if observation_spacing > 0 else None
+                ),
+                start_from_nearest_endpoint=bool(
+                    self._parameter("coverage_start_from_nearest_endpoint")
+                ),
+                viewpoint_filter=(
+                    self._viewpoint_has_building_clearance
+                    if self._building_obstacles else None
+                ),
+            )
+            policy_type = CoveragePolicy
+        elif policy_name in {"active", "adaptive_active", "lookahead_active"}:
+            policy_type = ActiveSearchPolicy
+            if policy_name == "lookahead_active" or (
+                policy_name == "active"
+                and adaptive_weights_enabled and lookahead_enabled
+            ):
+                policy_type = AdaptiveBeliefLookaheadPolicy
+            elif policy_name == "adaptive_active" or (
+                policy_name == "active" and adaptive_weights_enabled
+            ):
+                policy_type = AdaptiveActiveSearchPolicy
+        else:
+            raise ValueError(
+                "search_policy must be coverage, active, adaptive_active, "
+                "or lookahead_active"
+            )
         policy_kwargs = {
             "candidates": candidates,
             "sensor_model": sensor_model,
@@ -522,7 +564,8 @@ class GsiSearchNode(Node):
                     self._parameter("transit_suspect_min_angle_rad")
                 ),
             })
-        policy = policy_type(**policy_kwargs)
+        if policy_type is not CoveragePolicy:
+            policy = policy_type(**policy_kwargs)
         self._adapter = SearchObservationAdapter(
             grid,
             target_query=str(self._parameter("target_query")),
@@ -553,6 +596,7 @@ class GsiSearchNode(Node):
                 "active_distance_scale_m": distance_scale_m,
                 "active_adaptive_weights_enabled": adaptive_weights_enabled,
                 "active_belief_lookahead_enabled": lookahead_enabled,
+                "search_policy": policy_name,
                 **scenario.policy_metadata,
             },
             search_grid=grid,

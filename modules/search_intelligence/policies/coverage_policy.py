@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import List, Optional, Sequence, Tuple
+from typing import Callable, List, Optional, Sequence, Tuple
 
 from ..contracts import SearchState, Viewpoint
 from ..coverage_waypoints import plan_search_waypoints
@@ -20,6 +20,8 @@ class CoveragePolicy(SearchPolicy):
     camera_pitch_rad: float = -math.pi / 2.0
     max_points: int = 3000
     observation_spacing_m: Optional[float] = None
+    start_from_nearest_endpoint: bool = True
+    viewpoint_filter: Optional[Callable[[Viewpoint], bool]] = None
 
     def __post_init__(self) -> None:
         if self.pass_spacing_m <= 0:
@@ -48,6 +50,22 @@ class CoveragePolicy(SearchPolicy):
             )
         altitude = self._resolve_altitude(state, geometry)
         viewpoints = self._to_viewpoints(xy_points, altitude)
+        if self.viewpoint_filter is not None:
+            viewpoints = tuple(
+                viewpoint for viewpoint in viewpoints
+                if self.viewpoint_filter(viewpoint)
+            )
+            viewpoints = self._to_viewpoints(
+                tuple((item.x, item.y) for item in viewpoints), altitude
+            )
+        if (
+            self.start_from_nearest_endpoint
+            and state.current_viewpoint is not None
+            and len(viewpoints) > 1
+            and self._distance(state.current_viewpoint, viewpoints[-1])
+            < self._distance(state.current_viewpoint, viewpoints[0])
+        ):
+            viewpoints = self._reverse_with_headings(viewpoints)
         visited = set(state.visited_viewpoint_keys)
         remaining = tuple(
             viewpoint for viewpoint in viewpoints if viewpoint.key not in visited
@@ -57,6 +75,18 @@ class CoveragePolicy(SearchPolicy):
             available = max(0, viewpoint_limit - state.step_index)
             remaining = remaining[:available]
         return remaining
+
+    @staticmethod
+    def _distance(first: Viewpoint, second: Viewpoint) -> float:
+        return math.hypot(first.x - second.x, first.y - second.y)
+
+    def _reverse_with_headings(
+        self, viewpoints: Sequence[Viewpoint]
+    ) -> Tuple[Viewpoint, ...]:
+        return self._to_viewpoints(
+            tuple((item.x, item.y) for item in reversed(viewpoints)),
+            float(viewpoints[0].z),
+        )
 
     def _resolve_altitude(self, state: SearchState, geometry: dict) -> float:
         if self.altitude_m is not None:
